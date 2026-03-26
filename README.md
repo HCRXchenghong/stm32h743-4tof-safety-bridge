@@ -2,15 +2,6 @@
 
 基于 `STM32H743ZITx` 的 4 路 UART TOF 板端采集与急停联调工程。
 
-这个仓库现在保留的是一套可直接继续开发和上传 GitHub 的最小结构：
-- `firmware/h743_tof_usb_bridge_cubeide`：主固件工程，`STM32CubeIDE` 可继续打开
-- `tools/web_serial_dashboard`：本地 HTML 串口调试页面
-- `release/stm32h743-4tof-safety-bridge.hex`：当前可烧录的预编译固件
-- `激光DYP-RD-产品规格书(DYP-R01-V1.0)-250412-A0.pdf`：传感器规格书
-
-推荐 GitHub 仓库名：
-- `stm32h743-4tof-safety-bridge`
-
 ## 项目目标
 
 - 采集 4 路 `DYP-R01` 激光 TOF 串口数据
@@ -176,15 +167,3 @@ $H7TOF,seq,tof1,tof2,tof3,tof4,estop,valid_mask,fault_mask*CS
 - `E=`：UART 错误数
 - `L=`：最后收到的字节
 
-## 推荐上传到 GitHub 的内容
-
-当前仓库已经按精简结构整理，适合直接上传。
-
-推荐仓库名：
-- `stm32h743-4tof-safety-bridge`
-
-推荐提交说明：
-
-```text
-Initial commit: STM32H743 4-TOF USB CDC bridge with web serial dashboard
-```
