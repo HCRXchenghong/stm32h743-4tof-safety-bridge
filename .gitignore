@@ -1,0 +1,15 @@
+# STM32CubeIDE build outputs
+firmware/h743_tof_usb_bridge_cubeide/Debug/*
+!firmware/h743_tof_usb_bridge_cubeide/Debug/.gitkeep
+firmware/h743_tof_usb_bridge_cubeide/Release/
+
+# Keep the checked-in release firmware only
+release/*.bin
+release/*.elf
+release/*.map
+release/*.list
+
+# OS / editor noise
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,1093 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>H7 4路 TOF 串口联调台</title>
+  <style>
+    :root {
+      --bg: #0c1117;
+      --bg-alt: #111924;
+      --panel: rgba(17, 25, 36, 0.86);
+      --panel-strong: rgba(12, 17, 23, 0.94);
+      --line: rgba(126, 176, 255, 0.16);
+      --text: #edf4ff;
+      --muted: #89a1b9;
+      --cyan: #51e5ff;
+      --amber: #ffb454;
+      --red: #ff6b6b;
+      --green: #67f0a9;
+      --shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+      --radius: 20px;
+      --mono: "Cascadia Code", "Consolas", monospace;
+      --ui: "Segoe UI Variable", "Bahnschrift", "Trebuchet MS", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--ui);
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(81, 229, 255, 0.16), transparent 28%),
+        radial-gradient(circle at top right, rgba(255, 180, 84, 0.12), transparent 24%),
+        linear-gradient(160deg, #091019 0%, #0f1824 45%, #0a0f16 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: radial-gradient(circle at center, black 40%, transparent 92%);
+    }
+
+    .page {
+      width: min(1320px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 40px;
+    }
+
+    .hero,
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+    }
+
+    .hero {
+      padding: 28px;
+      display: grid;
+      gap: 20px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -80px -80px auto;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(81, 229, 255, 0.16), transparent 68%);
+      pointer-events: none;
+    }
+
+    .hero-top {
+      display: flex;
+      gap: 18px;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(81, 229, 255, 0.24);
+      color: var(--cyan);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: rgba(81, 229, 255, 0.08);
+    }
+
+    h1 {
+      margin: 12px 0 10px;
+      font-size: clamp(28px, 4vw, 46px);
+      line-height: 1;
+      letter-spacing: 0.02em;
+    }
+
+    .subtitle {
+      margin: 0;
+      max-width: 780px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .hero-side {
+      min-width: 260px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(12, 17, 23, 0.94);
+      font-weight: 700;
+    }
+
+    .status-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 18px rgba(255, 180, 84, 0.6);
+    }
+
+    .status-dot.ok {
+      background: var(--green);
+      box-shadow: 0 0 18px rgba(103, 240, 169, 0.6);
+    }
+
+    .status-dot.bad {
+      background: var(--red);
+      box-shadow: 0 0 18px rgba(255, 107, 107, 0.7);
+    }
+
+    .control-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      align-items: end;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .field label {
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    select,
+    button {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      min-height: 48px;
+      padding: 0 14px;
+      font: inherit;
+      color: var(--text);
+      background: rgba(12, 17, 23, 0.94);
+      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+    }
+
+    select:focus,
+    button:focus {
+      outline: none;
+      border-color: rgba(81, 229, 255, 0.5);
+      box-shadow: 0 0 0 3px rgba(81, 229, 255, 0.12);
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      border-color: rgba(81, 229, 255, 0.36);
+    }
+
+    button:disabled {
+      opacity: 0.46;
+      cursor: not-allowed;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, rgba(81, 229, 255, 0.18), rgba(81, 229, 255, 0.06));
+      border-color: rgba(81, 229, 255, 0.24);
+    }
+
+    .danger {
+      background: linear-gradient(135deg, rgba(255, 107, 107, 0.18), rgba(255, 107, 107, 0.06));
+      border-color: rgba(255, 107, 107, 0.24);
+    }
+
+    .ghost {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .notice {
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 180, 84, 0.18);
+      background: rgba(255, 180, 84, 0.08);
+      color: #ffd39a;
+      line-height: 1.6;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .left-stack,
+    .right-stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .panel {
+      padding: 20px;
+    }
+
+    .panel h2 {
+      margin: 0 0 16px;
+      font-size: 18px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+    }
+
+    .stat-card,
+    .sensor-card {
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 16px;
+      background: rgba(8, 12, 18, 0.62);
+      padding: 16px;
+    }
+
+    .stat-label,
+    .sensor-meta {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .stat-value {
+      margin-top: 10px;
+      font-size: 24px;
+      font-weight: 800;
+    }
+
+    .sensor-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .sensor-card {
+      display: grid;
+      gap: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .sensor-card::after {
+      content: "";
+      position: absolute;
+      inset: auto -30px -30px auto;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(81, 229, 255, 0.14), transparent 70%);
+      pointer-events: none;
+    }
+
+    .sensor-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .sensor-title {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .badge {
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      background: rgba(255, 180, 84, 0.12);
+      color: #ffd39a;
+      border: 1px solid rgba(255, 180, 84, 0.22);
+    }
+
+    .badge.ok {
+      background: rgba(103, 240, 169, 0.12);
+      color: #c9ffe1;
+      border-color: rgba(103, 240, 169, 0.22);
+    }
+
+    .badge.bad {
+      background: rgba(255, 107, 107, 0.12);
+      color: #ffd0d0;
+      border-color: rgba(255, 107, 107, 0.22);
+    }
+
+    .distance {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .distance strong {
+      font-size: clamp(30px, 6vw, 54px);
+      line-height: 0.95;
+      font-weight: 900;
+      font-family: var(--mono);
+      letter-spacing: -0.04em;
+    }
+
+    .distance span {
+      color: var(--muted);
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .sensor-foot {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .raw-log {
+      border-radius: 16px;
+      min-height: 280px;
+      max-height: 480px;
+      overflow: auto;
+      margin: 0;
+      padding: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: #081018;
+      color: #d7e5f4;
+      font: 13px/1.55 var(--mono);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .log-line {
+      display: block;
+      padding: 2px 0;
+    }
+
+    .log-line.error {
+      color: #ff9696;
+    }
+
+    .log-line.warn {
+      color: #ffd39a;
+    }
+
+    .log-line.info {
+      color: #91f1ff;
+    }
+
+    .protocol-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .protocol-list code,
+    .inline-code {
+      font-family: var(--mono);
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
+      padding: 2px 6px;
+      border-radius: 8px;
+    }
+
+    .subtle {
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    @media (max-width: 980px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .page {
+        width: min(100vw - 20px, 1320px);
+        padding-top: 18px;
+      }
+
+      .hero,
+      .panel {
+        padding: 16px;
+      }
+
+      .sensor-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="hero-top">
+        <div>
+          <span class="eyebrow">STM32 USB CDC / Web Serial</span>
+          <h1>H7 4路 TOF 串口联调台</h1>
+          <p class="subtitle">
+            这页用于直接从浏览器读取 STM32 的串口帧，实时显示 4 路 TOF 距离、急停位、有效位图和故障位图。
+            当前优先联通链路和测距稳定性，安全策略后续再补。
+          </p>
+        </div>
+
+        <div class="hero-side">
+          <div class="status-chip">
+            <span id="statusDot" class="status-dot"></span>
+            <span id="statusText">未连接</span>
+          </div>
+          <div class="notice">
+            建议用 Edge 或 Chrome 通过 <span class="inline-code">http://localhost</span> 打开本页。
+            不要直接双击 HTML。
+          </div>
+        </div>
+      </div>
+
+      <div class="control-row">
+        <div class="field">
+          <label for="baudrate">串口波特率</label>
+          <select id="baudrate">
+            <option value="115200" selected>115200</option>
+            <option value="230400">230400</option>
+            <option value="460800">460800</option>
+            <option value="921600">921600</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="decoderMode">解析模式</label>
+          <select id="decoderMode">
+            <option value="auto" selected>自动识别</option>
+            <option value="h7tof">仅 H7TOF 文本帧</option>
+            <option value="json">仅 JSON 行</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>串口操作</label>
+          <button id="connectButton" class="primary">连接串口</button>
+        </div>
+
+        <div class="field">
+          <label>链路控制</label>
+          <button id="disconnectButton" class="danger" disabled>断开串口</button>
+        </div>
+
+        <div class="field">
+          <label>辅助操作</label>
+          <button id="sampleButton" class="ghost">载入示例帧</button>
+        </div>
+
+        <div class="field">
+          <label>日志管理</label>
+          <button id="clearButton" class="ghost">清空日志</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid">
+      <div class="left-stack">
+        <section class="panel">
+          <h2>链路状态</h2>
+          <div class="stats">
+            <div class="stat-card">
+              <div class="stat-label">帧计数</div>
+              <div id="frameCount" class="stat-value">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">错误计数</div>
+              <div id="errorCount" class="stat-value">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">估算帧率</div>
+              <div id="frameRate" class="stat-value">0.0 Hz</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">序号</div>
+              <div id="seqValue" class="stat-value">--</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">急停位</div>
+              <div id="estopValue" class="stat-value">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Valid Mask</div>
+              <div id="validMaskValue" class="stat-value">0x00</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Fault Mask</div>
+              <div id="faultMaskValue" class="stat-value">0x00</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">最后更新</div>
+              <div id="lastUpdateValue" class="stat-value">--</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>4 路 TOF</h2>
+          <div class="sensor-grid">
+            <article class="sensor-card">
+              <div class="sensor-head">
+                <div>
+                  <p class="sensor-meta">Serial Channel 1</p>
+                  <h3 class="sensor-title">TOF1</h3>
+                </div>
+                <span id="tof1Badge" class="badge">等待数据</span>
+              </div>
+              <div class="distance">
+                <strong id="tof1Distance">--</strong>
+                <span>mm</span>
+              </div>
+              <div class="sensor-foot">
+                <span class="sensor-meta">米值 <span id="tof1Meters">--</span></span>
+                <span class="sensor-meta">状态 <span id="tof1State">无帧</span></span>
+              </div>
+            </article>
+
+            <article class="sensor-card">
+              <div class="sensor-head">
+                <div>
+                  <p class="sensor-meta">Serial Channel 2</p>
+                  <h3 class="sensor-title">TOF2</h3>
+                </div>
+                <span id="tof2Badge" class="badge">等待数据</span>
+              </div>
+              <div class="distance">
+                <strong id="tof2Distance">--</strong>
+                <span>mm</span>
+              </div>
+              <div class="sensor-foot">
+                <span class="sensor-meta">米值 <span id="tof2Meters">--</span></span>
+                <span class="sensor-meta">状态 <span id="tof2State">无帧</span></span>
+              </div>
+            </article>
+
+            <article class="sensor-card">
+              <div class="sensor-head">
+                <div>
+                  <p class="sensor-meta">Serial Channel 3</p>
+                  <h3 class="sensor-title">TOF3</h3>
+                </div>
+                <span id="tof3Badge" class="badge">等待数据</span>
+              </div>
+              <div class="distance">
+                <strong id="tof3Distance">--</strong>
+                <span>mm</span>
+              </div>
+              <div class="sensor-foot">
+                <span class="sensor-meta">米值 <span id="tof3Meters">--</span></span>
+                <span class="sensor-meta">状态 <span id="tof3State">无帧</span></span>
+              </div>
+            </article>
+
+            <article class="sensor-card">
+              <div class="sensor-head">
+                <div>
+                  <p class="sensor-meta">Serial Channel 4</p>
+                  <h3 class="sensor-title">TOF4</h3>
+                </div>
+                <span id="tof4Badge" class="badge">等待数据</span>
+              </div>
+              <div class="distance">
+                <strong id="tof4Distance">--</strong>
+                <span>mm</span>
+              </div>
+              <div class="sensor-foot">
+                <span class="sensor-meta">米值 <span id="tof4Meters">--</span></span>
+                <span class="sensor-meta">状态 <span id="tof4State">无帧</span></span>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div>
+
+      <div class="right-stack">
+        <section class="panel">
+          <h2>协议说明</h2>
+          <ul class="protocol-list">
+            <li>推荐 STM32 输出格式：<code>$H7TOF,seq,tof1,tof2,tof3,tof4,estop,valid_mask,fault_mask*CS</code></li>
+            <li>本页默认按行解析，支持 <code>\r\n</code> 结尾。</li>
+            <li>也兼容单行 JSON，例如 <code>{"seq":1,"tof":[520,521,522,523],"estop":0,"valid_mask":"0F","fault_mask":"00"}</code></li>
+            <li>无效距离建议发 <code>65535</code>，页面会显示为无效。</li>
+            <li>HTML 和 ROS1 节点不能同时占用同一个串口。</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>原始串口日志</h2>
+          <p class="subtle">
+            这里保留最近 200 行。用于检查串口有没有断行、校验失败、格式错误或字段异常。
+          </p>
+          <div id="rawLog" class="raw-log"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      port: null,
+      reader: null,
+      readLoopPromise: null,
+      keepReading: false,
+      decoder: new TextDecoder(),
+      buffer: "",
+      frameCount: 0,
+      errorCount: 0,
+      timestamps: [],
+      logLines: [],
+    };
+
+    const els = {
+      connectButton: document.getElementById("connectButton"),
+      disconnectButton: document.getElementById("disconnectButton"),
+      clearButton: document.getElementById("clearButton"),
+      sampleButton: document.getElementById("sampleButton"),
+      baudrate: document.getElementById("baudrate"),
+      decoderMode: document.getElementById("decoderMode"),
+      statusDot: document.getElementById("statusDot"),
+      statusText: document.getElementById("statusText"),
+      frameCount: document.getElementById("frameCount"),
+      errorCount: document.getElementById("errorCount"),
+      frameRate: document.getElementById("frameRate"),
+      seqValue: document.getElementById("seqValue"),
+      estopValue: document.getElementById("estopValue"),
+      validMaskValue: document.getElementById("validMaskValue"),
+      faultMaskValue: document.getElementById("faultMaskValue"),
+      lastUpdateValue: document.getElementById("lastUpdateValue"),
+      rawLog: document.getElementById("rawLog"),
+    };
+
+    const sensorEls = [1, 2, 3, 4].map((index) => ({
+      badge: document.getElementById(`tof${index}Badge`),
+      distance: document.getElementById(`tof${index}Distance`),
+      meters: document.getElementById(`tof${index}Meters`),
+      state: document.getElementById(`tof${index}State`),
+    }));
+
+    function setConnectionState(kind, text) {
+      els.statusDot.className = "status-dot";
+      if (kind === "ok") {
+        els.statusDot.classList.add("ok");
+      } else if (kind === "bad") {
+        els.statusDot.classList.add("bad");
+      }
+      els.statusText.textContent = text;
+    }
+
+    function escapeHtml(value) {
+      return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    function appendLog(message, type = "info") {
+      const time = new Date().toLocaleTimeString();
+      state.logLines.push({ time, message, type });
+      state.logLines = state.logLines.slice(-200);
+      els.rawLog.innerHTML = state.logLines
+        .map((entry) => `<span class="log-line ${entry.type}">[${entry.time}] ${escapeHtml(entry.message)}</span>`)
+        .join("");
+      els.rawLog.scrollTop = els.rawLog.scrollHeight;
+    }
+
+    function updateCounters() {
+      els.frameCount.textContent = String(state.frameCount);
+      els.errorCount.textContent = String(state.errorCount);
+    }
+
+    function updateFrameRate() {
+      const now = Date.now();
+      state.timestamps = state.timestamps.filter((item) => now - item < 5000);
+      if (state.timestamps.length < 2) {
+        els.frameRate.textContent = "0.0 Hz";
+        return;
+      }
+      const span = (state.timestamps[state.timestamps.length - 1] - state.timestamps[0]) / 1000;
+      const rate = span > 0 ? (state.timestamps.length - 1) / span : 0;
+      els.frameRate.textContent = `${rate.toFixed(1)} Hz`;
+    }
+
+    function formatMask(value) {
+      if (value == null || Number.isNaN(value)) {
+        return "0x00";
+      }
+      return `0x${value.toString(16).toUpperCase().padStart(2, "0")}`;
+    }
+
+    function formatDistance(value) {
+      if (value == null || Number.isNaN(value) || value < 0 || value >= 65535) {
+        return "--";
+      }
+      return String(value);
+    }
+
+    function formatMeters(value) {
+      if (value == null || Number.isNaN(value) || value < 0 || value >= 65535) {
+        return "--";
+      }
+      return `${(value / 1000).toFixed(3)} m`;
+    }
+
+    function setSensorCard(index, distance, validMask, faultMask) {
+      const valid = ((validMask >> index) & 0x01) === 1;
+      const fault = ((faultMask >> index) & 0x01) === 1;
+      const sensor = sensorEls[index];
+
+      sensor.distance.textContent = formatDistance(distance);
+      sensor.meters.textContent = formatMeters(distance);
+
+      let text = "等待数据";
+      let badgeClass = "badge";
+
+      if (valid && !fault) {
+        text = "有效";
+        badgeClass = "badge ok";
+      } else if (valid && fault) {
+        text = "故障";
+        badgeClass = "badge bad";
+      } else if (!valid && fault) {
+        text = "无效/故障";
+        badgeClass = "badge bad";
+      } else if (!valid) {
+        text = "无效";
+      }
+
+      sensor.badge.className = badgeClass;
+      sensor.badge.textContent = text;
+      sensor.state.textContent = text;
+    }
+
+    function updateDashboard(frame) {
+      state.frameCount += 1;
+      state.timestamps.push(Date.now());
+      updateCounters();
+      updateFrameRate();
+
+      els.seqValue.textContent = String(frame.seq ?? "--");
+      els.estopValue.textContent = String(frame.estop ?? 0);
+      els.validMaskValue.textContent = formatMask(frame.validMask);
+      els.faultMaskValue.textContent = formatMask(frame.faultMask);
+      els.lastUpdateValue.textContent = new Date().toLocaleTimeString();
+
+      for (let i = 0; i < 4; i += 1) {
+        setSensorCard(i, frame.tof[i], frame.validMask, frame.faultMask);
+      }
+
+      if (frame.estop === 1) {
+        setConnectionState("bad", "串口在线 / 急停触发");
+      } else {
+        setConnectionState("ok", "串口在线 / 正常收帧");
+      }
+    }
+
+    function parseInteger(value) {
+      const raw = String(value).trim();
+      if (!raw) {
+        return null;
+      }
+      if (raw.toLowerCase().startsWith("0x")) {
+        return Number.parseInt(raw, 16);
+      }
+      if (/[a-f]/i.test(raw)) {
+        return Number.parseInt(raw, 16);
+      }
+      return Number.parseInt(raw, 10);
+    }
+
+    function xorChecksum(payload) {
+      let checksum = 0;
+      for (const ch of payload) {
+        checksum ^= ch.charCodeAt(0);
+      }
+      return checksum;
+    }
+
+    function parseH7TofLine(line) {
+      const trimmed = line.trim();
+      const clean = trimmed.startsWith("$") ? trimmed.slice(1) : trimmed;
+      const starIndex = clean.indexOf("*");
+
+      let payload = clean;
+      let checksumText = null;
+      if (starIndex >= 0) {
+        payload = clean.slice(0, starIndex);
+        checksumText = clean.slice(starIndex + 1).trim();
+      }
+
+      const parts = payload.split(",").map((item) => item.trim());
+      if (parts.length < 9) {
+        throw new Error("字段数量不足");
+      }
+      if (parts[0] !== "H7TOF" && parts[0] !== "TOF") {
+        throw new Error("帧头不匹配");
+      }
+
+      if (checksumText) {
+        const expected = Number.parseInt(checksumText, 16);
+        const actual = xorChecksum(payload);
+        if (expected !== actual) {
+          throw new Error(`checksum 失败: ${actual.toString(16).toUpperCase()} != ${checksumText.toUpperCase()}`);
+        }
+      }
+
+      return {
+        seq: parseInteger(parts[1]) ?? 0,
+        tof: [
+          parseInteger(parts[2]) ?? 65535,
+          parseInteger(parts[3]) ?? 65535,
+          parseInteger(parts[4]) ?? 65535,
+          parseInteger(parts[5]) ?? 65535,
+        ],
+        estop: parseInteger(parts[6]) ?? 0,
+        validMask: parseInteger(parts[7]) ?? 0,
+        faultMask: parseInteger(parts[8]) ?? 0,
+      };
+    }
+
+    function parseJsonLine(line) {
+      const obj = JSON.parse(line);
+      const tofArray = Array.isArray(obj.tof)
+        ? obj.tof
+        : [obj.tof1_mm, obj.tof2_mm, obj.tof3_mm, obj.tof4_mm];
+
+      if (!Array.isArray(tofArray) || tofArray.length < 4) {
+        throw new Error("JSON 缺少 tof 数组");
+      }
+
+      return {
+        seq: parseInteger(obj.seq) ?? 0,
+        tof: tofArray.slice(0, 4).map((item) => parseInteger(item) ?? 65535),
+        estop: parseInteger(obj.estop) ?? 0,
+        validMask: parseInteger(obj.valid_mask ?? obj.validMask) ?? 0,
+        faultMask: parseInteger(obj.fault_mask ?? obj.faultMask) ?? 0,
+      };
+    }
+
+    function parseFrame(line) {
+      const mode = els.decoderMode.value;
+      if (mode === "json") {
+        return parseJsonLine(line);
+      }
+      if (mode === "h7tof") {
+        return parseH7TofLine(line);
+      }
+
+      const text = line.trim();
+      if (!text) {
+        throw new Error("空行");
+      }
+      if (text.startsWith("{")) {
+        return parseJsonLine(text);
+      }
+      return parseH7TofLine(text);
+    }
+
+    function handleLine(line) {
+      const text = line.trim();
+      if (!text) {
+        return;
+      }
+
+      appendLog(text, "info");
+
+      try {
+        const frame = parseFrame(text);
+        updateDashboard(frame);
+      } catch (error) {
+        state.errorCount += 1;
+        updateCounters();
+        appendLog(`解析失败: ${error.message}`, "error");
+      }
+    }
+
+    function consumeBuffer(chunk) {
+      state.buffer += chunk;
+      const lines = state.buffer.split(/\r\n|[\r\n]/);
+      state.buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        handleLine(line);
+      }
+    }
+
+    async function disconnectSerial() {
+      state.keepReading = false;
+
+      if (state.reader) {
+        try {
+          await state.reader.cancel();
+        } catch (error) {
+          appendLog(`reader cancel 失败: ${error.message}`, "warn");
+        }
+      }
+
+      if (state.readLoopPromise) {
+        try {
+          await state.readLoopPromise;
+        } catch (error) {
+          appendLog(`read loop 退出异常: ${error.message}`, "warn");
+        }
+      }
+
+      if (state.port) {
+        try {
+          await state.port.close();
+        } catch (error) {
+          appendLog(`port close 失败: ${error.message}`, "warn");
+        }
+      }
+
+      state.reader = null;
+      state.readLoopPromise = null;
+      state.port = null;
+      els.connectButton.disabled = false;
+      els.disconnectButton.disabled = true;
+      setConnectionState("", "未连接");
+      appendLog("串口已断开", "warn");
+    }
+
+    async function readLoop() {
+      if (!state.port || !state.port.readable) {
+        return;
+      }
+
+      state.reader = state.port.readable.getReader();
+
+      try {
+        while (state.keepReading) {
+          const { value, done } = await state.reader.read();
+          if (done) {
+            break;
+          }
+          if (value) {
+            consumeBuffer(state.decoder.decode(value, { stream: true }));
+          }
+        }
+      } catch (error) {
+        if (state.keepReading) {
+          state.errorCount += 1;
+          updateCounters();
+          appendLog(`串口读取失败: ${error.message}`, "error");
+          setConnectionState("bad", "读取异常");
+        }
+      } finally {
+        if (state.reader) {
+          state.reader.releaseLock();
+        }
+        state.reader = null;
+        state.readLoopPromise = null;
+      }
+    }
+
+    async function connectSerial() {
+      if (!("serial" in navigator)) {
+        appendLog("当前浏览器不支持 Web Serial", "error");
+        setConnectionState("bad", "浏览器不支持 Web Serial");
+        return;
+      }
+
+      if (!window.isSecureContext) {
+        appendLog("当前页面不是安全上下文，请改用 http://localhost 打开", "error");
+        setConnectionState("bad", "请用 localhost 打开本页");
+        return;
+      }
+
+      try {
+        const port = await navigator.serial.requestPort();
+        const baudrate = Number.parseInt(els.baudrate.value, 10);
+
+        await port.open({
+          baudRate: baudrate,
+          dataBits: 8,
+          stopBits: 1,
+          parity: "none",
+          bufferSize: 4096,
+          flowControl: "none",
+        });
+
+        state.port = port;
+        state.keepReading = true;
+        els.connectButton.disabled = true;
+        els.disconnectButton.disabled = false;
+        setConnectionState("", "串口已打开，等待首帧");
+        appendLog(`串口已连接，baud=${baudrate}`, "info");
+        state.readLoopPromise = readLoop();
+      } catch (error) {
+        appendLog(`连接串口失败: ${error.message}`, "error");
+        setConnectionState("bad", "连接失败");
+      }
+    }
+
+    function resetDashboard() {
+      state.frameCount = 0;
+      state.errorCount = 0;
+      state.timestamps = [];
+      state.buffer = "";
+      updateCounters();
+      updateFrameRate();
+      els.seqValue.textContent = "--";
+      els.estopValue.textContent = "0";
+      els.validMaskValue.textContent = "0x00";
+      els.faultMaskValue.textContent = "0x00";
+      els.lastUpdateValue.textContent = "--";
+
+      for (const sensor of sensorEls) {
+        sensor.badge.className = "badge";
+        sensor.badge.textContent = "等待数据";
+        sensor.distance.textContent = "--";
+        sensor.meters.textContent = "--";
+        sensor.state.textContent = "无帧";
+      }
+    }
+
+    function injectSampleFrame() {
+      handleLine("$H7TOF,17,523,518,65535,521,0,0B,04*6C");
+      appendLog("已注入示例帧", "warn");
+    }
+
+    els.connectButton.addEventListener("click", connectSerial);
+    els.disconnectButton.addEventListener("click", disconnectSerial);
+    els.sampleButton.addEventListener("click", injectSampleFrame);
+    els.clearButton.addEventListener("click", () => {
+      state.logLines = [];
+      els.rawLog.innerHTML = "";
+      resetDashboard();
+      appendLog("日志和页面状态已清空", "warn");
+    });
+
+    if ("serial" in navigator) {
+      navigator.serial.addEventListener("disconnect", () => {
+        appendLog("检测到串口设备断开", "warn");
+        disconnectSerial();
+      });
+    }
+
+    resetDashboard();
+    appendLog("页面已加载。若浏览器提示不支持，请改用 Edge/Chrome，并通过 http://localhost 打开。", "info");
+  </script>
+</body>
+</html>
