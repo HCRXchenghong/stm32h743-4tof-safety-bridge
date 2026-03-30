@@ -1,56 +1,41 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>H7 TOF Safety Console</title>
+  <title>H7 4璺?TOF 涓插彛鑱旇皟鍙?/title>
   <style>
     :root {
-      --bg: #101419;
-      --bg-deep: #0c1014;
-      --panel: #171d24;
-      --panel-soft: #1d242c;
-      --panel-strong: #232d37;
-      --line: #303b47;
-      --line-strong: #48596b;
-      --text: #f2eee5;
-      --muted: #95a2af;
-      --muted-strong: #b8c2cc;
-      --teal: #6ec7bf;
-      --teal-strong: #92ddd5;
-      --amber: #d7a86c;
-      --amber-strong: #ebc997;
-      --red: #d96b5e;
-      --red-strong: #f09286;
-      --green: #76b98d;
-      --green-strong: #b2e0bf;
-      --shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
-      --radius-xl: 28px;
-      --radius-lg: 22px;
-      --radius-md: 16px;
-      --radius-sm: 12px;
-      --mono: "SFMono-Regular", "Cascadia Mono", "Consolas", monospace;
-      --ui: "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI Variable", sans-serif;
+      --bg: #0c1117;
+      --bg-alt: #111924;
+      --panel: rgba(17, 25, 36, 0.86);
+      --panel-strong: rgba(12, 17, 23, 0.94);
+      --line: rgba(126, 176, 255, 0.16);
+      --text: #edf4ff;
+      --muted: #89a1b9;
+      --cyan: #51e5ff;
+      --amber: #ffb454;
+      --red: #ff6b6b;
+      --green: #67f0a9;
+      --shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+      --radius: 20px;
+      --mono: "Cascadia Code", "Consolas", monospace;
+      --ui: "Segoe UI Variable", "Bahnschrift", "Trebuchet MS", sans-serif;
     }
 
     * {
       box-sizing: border-box;
     }
 
-    html,
-    body {
-      min-height: 100%;
-    }
-
     body {
       margin: 0;
-      color: var(--text);
+      min-height: 100vh;
       font-family: var(--ui);
+      color: var(--text);
       background:
-        radial-gradient(circle at 12% 14%, rgba(110, 199, 191, 0.10), transparent 24%),
-        radial-gradient(circle at 88% 10%, rgba(217, 107, 94, 0.09), transparent 22%),
-        linear-gradient(180deg, #12171c 0%, #0d1116 100%);
-      overflow-x: hidden;
+        radial-gradient(circle at top left, rgba(81, 229, 255, 0.16), transparent 28%),
+        radial-gradient(circle at top right, rgba(255, 180, 84, 0.12), transparent 24%),
+        linear-gradient(160deg, #091019 0%, #0f1824 45%, #0a0f16 100%);
     }
 
     body::before {
@@ -59,568 +44,310 @@
       inset: 0;
       pointer-events: none;
       background:
-        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
       background-size: 32px 32px;
-      mask-image: radial-gradient(circle at center, black 36%, transparent 88%);
-      opacity: 0.45;
-    }
-
-    body.estop-active::after {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      background: radial-gradient(circle at center, rgba(217, 107, 94, 0.10), transparent 62%);
-      animation: estopWash 1.4s ease-in-out infinite;
-    }
-
-    @keyframes estopWash {
-      0%,
-      100% {
-        opacity: 0.45;
-      }
-
-      50% {
-        opacity: 0.78;
-      }
-    }
-
-    @keyframes beaconPulse {
-      0%,
-      100% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(217, 107, 94, 0.38);
-      }
-
-      50% {
-        transform: scale(1.08);
-        box-shadow: 0 0 0 18px rgba(217, 107, 94, 0);
-      }
+      mask-image: radial-gradient(circle at center, black 40%, transparent 92%);
     }
 
     .page {
-      width: min(1480px, calc(100vw - 28px));
+      width: min(1320px, calc(100vw - 32px));
       margin: 0 auto;
-      padding: 22px 0 38px;
-      display: grid;
-      gap: 18px;
-      position: relative;
-      z-index: 1;
+      padding: 28px 0 40px;
     }
 
+    .hero,
     .panel {
-      position: relative;
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0)),
-        var(--panel);
       border: 1px solid var(--line);
-      border-radius: var(--radius-xl);
+      border-radius: var(--radius);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
       box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-
-    .panel::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), transparent 40%);
     }
 
     .hero {
       padding: 28px;
       display: grid;
-      grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.8fr);
-      gap: 24px;
-      align-items: stretch;
-    }
-
-    .hero-copy {
+      gap: 20px;
+      overflow: hidden;
       position: relative;
-      display: grid;
-      gap: 18px;
-      align-content: start;
     }
 
-    .hero-copy::after {
+    .hero::after {
       content: "";
       position: absolute;
-      right: -80px;
-      bottom: -100px;
-      width: 240px;
-      height: 240px;
+      inset: auto -80px -80px auto;
+      width: 220px;
+      height: 220px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(110, 199, 191, 0.12), transparent 70%);
+      background: radial-gradient(circle, rgba(81, 229, 255, 0.16), transparent 68%);
       pointer-events: none;
+    }
+
+    .hero-top {
+      display: flex;
+      gap: 18px;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
     }
 
     .eyebrow {
       display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      width: fit-content;
-      padding: 7px 12px;
+      padding: 6px 12px;
       border-radius: 999px;
-      background: rgba(110, 199, 191, 0.10);
-      border: 1px solid rgba(110, 199, 191, 0.18);
-      color: var(--teal-strong);
-      font-size: 12px;
-      letter-spacing: 0.10em;
-      text-transform: uppercase;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: clamp(30px, 5vw, 58px);
-      line-height: 0.95;
-      letter-spacing: -0.03em;
-      max-width: 12ch;
-    }
-
-    .lede {
-      margin: 0;
-      max-width: 70ch;
-      color: var(--muted-strong);
-      font-size: 16px;
-      line-height: 1.75;
-    }
-
-    .hero-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .hero-pill {
-      display: inline-flex;
-      align-items: center;
-      min-height: 38px;
-      padding: 0 14px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(255, 255, 255, 0.035);
-      color: var(--text);
-      font-size: 13px;
-    }
-
-    .hero-side {
-      display: grid;
-      gap: 14px;
-      align-content: start;
-    }
-
-    .status-block,
-    .beacon-block,
-    .note-card {
-      position: relative;
-      border-radius: var(--radius-lg);
-      border: 1px solid rgba(255, 255, 255, 0.07);
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.04));
-      padding: 16px 18px;
-    }
-
-    .status-block.online {
-      border-color: rgba(118, 185, 141, 0.30);
-      box-shadow: inset 0 0 0 1px rgba(118, 185, 141, 0.10);
-    }
-
-    .status-block.fault {
-      border-color: rgba(217, 107, 94, 0.32);
-      box-shadow: inset 0 0 0 1px rgba(217, 107, 94, 0.12);
-    }
-
-    .status-block {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      min-height: 78px;
-    }
-
-    .beacon-block {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 18px;
-      min-height: 118px;
-    }
-
-    .beacon-block.active {
-      border-color: rgba(217, 107, 94, 0.34);
-      box-shadow: inset 0 0 0 1px rgba(217, 107, 94, 0.14);
-    }
-
-    .note-card p,
-    .beacon-copy p {
-      margin: 8px 0 0;
-      color: var(--muted);
-      line-height: 1.7;
-      font-size: 14px;
-    }
-
-    .mini-label {
-      display: block;
-      color: var(--muted);
+      border: 1px solid rgba(81, 229, 255, 0.24);
+      color: var(--cyan);
       font-size: 12px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      margin-bottom: 5px;
+      background: rgba(81, 229, 255, 0.08);
     }
 
-    .status-orb,
-    .beacon-orb {
-      width: 16px;
-      height: 16px;
-      flex: none;
+    h1 {
+      margin: 12px 0 10px;
+      font-size: clamp(28px, 4vw, 46px);
+      line-height: 1;
+      letter-spacing: 0.02em;
+    }
+
+    .subtitle {
+      margin: 0;
+      max-width: 780px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .hero-side {
+      min-width: 260px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(12, 17, 23, 0.94);
+      font-weight: 700;
+    }
+
+    .status-dot {
+      width: 11px;
+      height: 11px;
       border-radius: 50%;
       background: var(--amber);
-      box-shadow: 0 0 0 8px rgba(215, 168, 108, 0.12), 0 0 18px rgba(215, 168, 108, 0.48);
+      box-shadow: 0 0 18px rgba(255, 180, 84, 0.6);
     }
 
-    .status-orb.ok {
+    .status-dot.ok {
       background: var(--green);
-      box-shadow: 0 0 0 8px rgba(118, 185, 141, 0.12), 0 0 20px rgba(118, 185, 141, 0.46);
+      box-shadow: 0 0 18px rgba(103, 240, 169, 0.6);
     }
 
-    .status-orb.bad,
-    .beacon-orb.bad {
+    .status-dot.bad {
       background: var(--red);
-      box-shadow: 0 0 0 8px rgba(217, 107, 94, 0.14), 0 0 22px rgba(217, 107, 94, 0.56);
+      box-shadow: 0 0 18px rgba(255, 107, 107, 0.7);
     }
 
-    .beacon-orb {
-      width: 22px;
-      height: 22px;
-      box-shadow: 0 0 0 10px rgba(215, 168, 108, 0.12), 0 0 24px rgba(215, 168, 108, 0.52);
-    }
-
-    .beacon-orb.bad {
-      animation: beaconPulse 1.05s ease-out infinite;
-    }
-
-    #statusText,
-    #estopLampText {
-      display: block;
-      font-size: 20px;
-      line-height: 1.15;
-    }
-
-    .control-deck {
-      padding: 18px;
-    }
-
-    .control-grid {
+    .control-row {
       display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
       align-items: end;
     }
 
-    .control-field {
+    .field {
       display: grid;
       gap: 8px;
     }
 
-    .control-field label {
+    .field label {
       color: var(--muted);
-      font-size: 12px;
+      font-size: 13px;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
     }
 
     select,
     button {
       appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
       min-height: 48px;
       padding: 0 14px;
-      border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: var(--panel-soft);
-      color: var(--text);
       font: inherit;
-      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
-    }
-
-    select:hover,
-    button:hover:not(:disabled) {
-      transform: translateY(-1px);
-      border-color: rgba(255, 255, 255, 0.16);
+      color: var(--text);
+      background: rgba(12, 17, 23, 0.94);
+      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
     }
 
     select:focus,
     button:focus {
       outline: none;
-      border-color: rgba(110, 199, 191, 0.48);
-      box-shadow: 0 0 0 4px rgba(110, 199, 191, 0.12);
+      border-color: rgba(81, 229, 255, 0.5);
+      box-shadow: 0 0 0 3px rgba(81, 229, 255, 0.12);
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      border-color: rgba(81, 229, 255, 0.36);
     }
 
     button:disabled {
+      opacity: 0.46;
       cursor: not-allowed;
-      opacity: 0.42;
-      transform: none;
     }
 
     .primary {
-      background: linear-gradient(135deg, rgba(110, 199, 191, 0.18), rgba(110, 199, 191, 0.06));
-      border-color: rgba(110, 199, 191, 0.28);
+      background: linear-gradient(135deg, rgba(81, 229, 255, 0.18), rgba(81, 229, 255, 0.06));
+      border-color: rgba(81, 229, 255, 0.24);
     }
 
     .danger {
-      background: linear-gradient(135deg, rgba(217, 107, 94, 0.18), rgba(217, 107, 94, 0.06));
-      border-color: rgba(217, 107, 94, 0.28);
+      background: linear-gradient(135deg, rgba(255, 107, 107, 0.18), rgba(255, 107, 107, 0.06));
+      border-color: rgba(255, 107, 107, 0.24);
     }
 
     .ghost {
-      background: rgba(255, 255, 255, 0.03);
+      background: rgba(255, 255, 255, 0.02);
     }
 
-    .dashboard-grid {
+    .notice {
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 180, 84, 0.18);
+      background: rgba(255, 180, 84, 0.08);
+      color: #ffd39a;
+      line-height: 1.6;
+    }
+
+    .grid {
       display: grid;
-      grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.92fr);
+      grid-template-columns: 1.15fr 0.85fr;
       gap: 18px;
-      align-items: start;
+      margin-top: 18px;
     }
 
-    .scene-panel,
-    .side-stack,
-    .bottom-grid {
-      min-width: 0;
-    }
-
-    .scene-panel,
-    .telemetry-panel,
-    .matrix-panel,
-    .protocol-panel,
-    .strategy-panel,
-    .log-panel {
-      padding: 22px;
-    }
-
-    .side-stack {
+    .left-stack,
+    .right-stack {
       display: grid;
       gap: 18px;
     }
 
-    .section-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 16px;
-      flex-wrap: wrap;
-      margin-bottom: 18px;
+    .panel {
+      padding: 20px;
     }
 
-    .section-kicker {
-      display: block;
+    .panel h2 {
+      margin: 0 0 16px;
+      font-size: 18px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+    }
+
+    .stat-card,
+    .sensor-card {
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 16px;
+      background: rgba(8, 12, 18, 0.62);
+      padding: 16px;
+    }
+
+    .stat-label,
+    .sensor-meta {
       color: var(--muted);
       font-size: 12px;
-      letter-spacing: 0.10em;
       text-transform: uppercase;
-      margin-bottom: 6px;
+      letter-spacing: 0.08em;
     }
 
-    h2 {
-      margin: 0;
+    .stat-value {
+      margin-top: 10px;
       font-size: 24px;
-      letter-spacing: -0.02em;
+      font-weight: 800;
     }
 
-    .section-note {
-      margin: 0;
-      max-width: 40ch;
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1.65;
-    }
-
-    .scene-grid {
+    .sensor-grid {
       display: grid;
-      grid-template-columns: minmax(180px, 1fr) minmax(260px, 1.05fr) minmax(180px, 1fr);
-      grid-template-areas:
-        "front front front"
-        "tof4 core tof1"
-        "tof3 core tof2"
-        "rear rear rear";
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
-      align-items: stretch;
-    }
-
-    .scene-lane {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 44px;
-      border-radius: 999px;
-      border: 1px dashed rgba(255, 255, 255, 0.10);
-      background: rgba(255, 255, 255, 0.025);
-      color: var(--muted);
-      font-size: 12px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-    }
-
-    .scene-front {
-      grid-area: front;
-    }
-
-    .scene-rear {
-      grid-area: rear;
-    }
-
-    #tof1Card {
-      grid-area: tof1;
-    }
-
-    #tof2Card {
-      grid-area: tof2;
-    }
-
-    #tof3Card {
-      grid-area: tof3;
-    }
-
-    #tof4Card {
-      grid-area: tof4;
     }
 
     .sensor-card {
-      position: relative;
       display: grid;
-      gap: 16px;
-      padding: 18px;
-      border-radius: 22px;
-      border: 1px solid rgba(255, 255, 255, 0.07);
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
-        rgba(255, 255, 255, 0.02);
-      min-height: 230px;
-      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+      gap: 14px;
+      position: relative;
       overflow: hidden;
-    }
-
-    .sensor-card::before {
-      content: "";
-      position: absolute;
-      inset: 0 auto 0 0;
-      width: 4px;
-      background: rgba(215, 168, 108, 0.58);
     }
 
     .sensor-card::after {
       content: "";
       position: absolute;
-      right: -24px;
-      bottom: -24px;
+      inset: auto -30px -30px auto;
       width: 120px;
       height: 120px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(110, 199, 191, 0.10), transparent 70%);
+      background: radial-gradient(circle, rgba(81, 229, 255, 0.14), transparent 70%);
       pointer-events: none;
     }
 
-    .sensor-card.active {
-      border-color: rgba(118, 185, 141, 0.30);
-      box-shadow: inset 0 0 0 1px rgba(118, 185, 141, 0.10);
-    }
-
-    .sensor-card.active::before {
-      background: rgba(118, 185, 141, 0.78);
-    }
-
-    .sensor-card.inactive {
-      border-color: rgba(215, 168, 108, 0.28);
-      opacity: 0.86;
-    }
-
-    .sensor-card.inactive::before {
-      background: rgba(215, 168, 108, 0.72);
-    }
-
-    .sensor-card.warning {
-      border-color: rgba(215, 168, 108, 0.34);
-      box-shadow: inset 0 0 0 1px rgba(215, 168, 108, 0.12);
-    }
-
-    .sensor-card.warning::before {
-      background: rgba(215, 168, 108, 0.82);
-    }
-
-    .sensor-card.invalid,
-    .sensor-card.tripped {
-      border-color: rgba(217, 107, 94, 0.34);
-      box-shadow: inset 0 0 0 1px rgba(217, 107, 94, 0.14);
-      transform: translateY(-1px);
-    }
-
-    .sensor-card.invalid::before,
-    .sensor-card.tripped::before {
-      background: rgba(217, 107, 94, 0.88);
-    }
-
-    .sensor-top,
-    .sensor-foot {
+    .sensor-head {
       display: flex;
+      align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      align-items: flex-start;
-      flex-wrap: wrap;
-    }
-
-    .sensor-zone {
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      margin-bottom: 7px;
+      gap: 8px;
     }
 
     .sensor-title {
       margin: 0;
-      font-size: 24px;
-      letter-spacing: -0.03em;
+      font-size: 18px;
     }
 
     .badge {
-      display: inline-flex;
-      align-items: center;
-      min-height: 34px;
-      padding: 0 12px;
+      padding: 6px 10px;
       border-radius: 999px;
-      border: 1px solid rgba(215, 168, 108, 0.24);
-      background: rgba(215, 168, 108, 0.12);
-      color: var(--amber-strong);
       font-size: 12px;
       font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      white-space: nowrap;
+      letter-spacing: 0.04em;
+      background: rgba(255, 180, 84, 0.12);
+      color: #ffd39a;
+      border: 1px solid rgba(255, 180, 84, 0.22);
     }
 
     .badge.ok {
-      border-color: rgba(118, 185, 141, 0.26);
-      background: rgba(118, 185, 141, 0.12);
-      color: var(--green-strong);
+      background: rgba(103, 240, 169, 0.12);
+      color: #c9ffe1;
+      border-color: rgba(103, 240, 169, 0.22);
     }
 
     .badge.bad {
-      border-color: rgba(217, 107, 94, 0.28);
-      background: rgba(217, 107, 94, 0.12);
-      color: var(--red-strong);
+      background: rgba(255, 107, 107, 0.12);
+      color: #ffd0d0;
+      border-color: rgba(255, 107, 107, 0.22);
     }
 
     .distance {
       display: flex;
       align-items: baseline;
       gap: 10px;
-      padding: 6px 0;
     }
 
     .distance strong {
-      font-family: var(--mono);
-      font-size: clamp(34px, 5vw, 58px);
+      font-size: clamp(30px, 6vw, 54px);
       line-height: 0.95;
-      letter-spacing: -0.06em;
+      font-weight: 900;
+      font-family: var(--mono);
+      letter-spacing: -0.04em;
     }
 
     .distance span {
@@ -629,320 +356,24 @@
       font-weight: 700;
     }
 
-    .sensor-meta {
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.6;
-    }
-
-    .sensor-meta strong {
-      color: var(--text);
-      font-weight: 700;
-      margin-left: 6px;
-    }
-
-    .core-card {
-      grid-area: core;
-      position: relative;
-      min-height: 474px;
-      border-radius: 30px;
-      border: 1px solid rgba(255, 255, 255, 0.07);
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
-        rgba(255, 255, 255, 0.02);
-      padding: 24px;
-      display: grid;
-      align-content: space-between;
-      gap: 18px;
-      overflow: hidden;
-    }
-
-    .core-card::before {
-      content: "";
-      position: absolute;
-      inset: 18px;
-      border-radius: 28px;
-      border: 1px dashed rgba(255, 255, 255, 0.08);
-      pointer-events: none;
-    }
-
-    .core-card::after {
-      content: "";
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 280px;
-      height: 280px;
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      background: radial-gradient(circle, rgba(110, 199, 191, 0.10), transparent 72%);
-      pointer-events: none;
-    }
-
-    .core-top,
-    .core-footer {
-      position: relative;
-      z-index: 1;
-    }
-
-    .core-top {
+    .sensor-foot {
       display: flex;
       justify-content: space-between;
       gap: 12px;
-      align-items: flex-start;
       flex-wrap: wrap;
     }
 
-    .core-title {
-      margin: 0;
-      font-size: 30px;
-      letter-spacing: -0.03em;
-    }
-
-    .core-copy {
-      margin: 8px 0 0;
-      max-width: 32ch;
-      color: var(--muted);
-      line-height: 1.7;
-      font-size: 14px;
-    }
-
-    .core-mode {
-      position: relative;
-      z-index: 1;
-      display: grid;
-      justify-items: center;
-      align-content: center;
-      gap: 10px;
-      text-align: center;
-      padding: 14px 10px;
-    }
-
-    .core-mode .mini-label {
-      margin: 0;
-    }
-
-    .mode-hero {
-      margin: 0;
-      font-size: clamp(34px, 5vw, 54px);
-      line-height: 0.92;
-      letter-spacing: -0.05em;
-    }
-
-    .core-status {
-      margin: 0;
-      color: var(--muted-strong);
-      font-size: 15px;
-      line-height: 1.7;
-      max-width: 28ch;
-    }
-
-    .core-outline {
-      position: relative;
-      width: min(260px, 92%);
-      height: 132px;
-      margin: 0 auto;
-      border-radius: 34px;
-      border: 1px solid rgba(255, 255, 255, 0.10);
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01));
-      box-shadow:
-        inset 0 0 0 1px rgba(255, 255, 255, 0.03),
-        0 24px 48px rgba(0, 0, 0, 0.18);
-      overflow: hidden;
-    }
-
-    .core-outline::before {
-      content: "";
-      position: absolute;
-      inset: 18px 30px;
-      border-radius: 24px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(0, 0, 0, 0.10);
-    }
-
-    .core-outline::after {
-      content: "";
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 84px;
-      height: 18px;
-      border-radius: 999px;
-      transform: translate(-50%, -50%);
-      background: rgba(255, 255, 255, 0.08);
-      box-shadow: 0 -40px 0 rgba(255, 255, 255, 0.03), 0 40px 0 rgba(255, 255, 255, 0.03);
-    }
-
-    .core-footer {
-      display: grid;
-      gap: 14px;
-    }
-
-    .core-metrics {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .core-metric {
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      background: rgba(0, 0, 0, 0.10);
-      padding: 14px 12px;
-    }
-
-    .core-metric span {
-      display: block;
-      color: var(--muted);
-      font-size: 11px;
-      letter-spacing: 0.10em;
-      text-transform: uppercase;
-    }
-
-    .core-metric strong {
-      display: block;
-      margin-top: 8px;
-      font-family: var(--mono);
-      font-size: 22px;
-      line-height: 1;
-      letter-spacing: -0.04em;
-    }
-
-    .telemetry-grid,
-    .matrix-grid,
-    .rules-grid {
-      display: grid;
-      gap: 12px;
-    }
-
-    .telemetry-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .matrix-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .telemetry-card,
-    .matrix-card,
-    .rule-card {
-      border-radius: 18px;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      background: rgba(255, 255, 255, 0.025);
-      padding: 16px;
-      min-width: 0;
-    }
-
-    .telemetry-label,
-    .matrix-label,
-    .rule-title {
-      color: var(--muted);
-      font-size: 12px;
-      letter-spacing: 0.09em;
-      text-transform: uppercase;
-    }
-
-    .telemetry-value,
-    .matrix-value {
-      margin-top: 10px;
-      font-size: 28px;
-      line-height: 1;
-      letter-spacing: -0.05em;
-      font-weight: 800;
-      min-width: 0;
-      word-break: break-word;
-    }
-
-    .matrix-value {
-      font-family: var(--mono);
-      font-size: 24px;
-    }
-
-    .matrix-caption,
-    .rule-copy {
-      margin: 8px 0 0;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.65;
-    }
-
-    .summary-bar {
-      margin-top: 14px;
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .summary-chip {
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      background: rgba(0, 0, 0, 0.10);
-      padding: 14px 12px;
-    }
-
-    .summary-chip span {
-      display: block;
-      color: var(--muted);
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .summary-chip strong {
-      display: block;
-      margin-top: 8px;
-      font-size: 22px;
-      line-height: 1;
-      letter-spacing: -0.04em;
-    }
-
-    .protocol-list {
-      margin: 0;
-      padding-left: 18px;
-      color: var(--muted-strong);
-      line-height: 1.8;
-      font-size: 14px;
-    }
-
-    code,
-    .mono {
-      font-family: var(--mono);
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.06);
-      padding: 2px 6px;
-      border-radius: 8px;
-    }
-
-    .bottom-grid {
-      display: grid;
-      grid-template-columns: minmax(300px, 0.84fr) minmax(0, 1.16fr);
-      gap: 18px;
-      align-items: start;
-    }
-
-    .rules-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .rule-card strong {
-      display: block;
-      margin-top: 8px;
-      font-size: 18px;
-      letter-spacing: -0.03em;
-    }
-
     .raw-log {
-      min-height: 360px;
-      max-height: 560px;
+      border-radius: 16px;
+      min-height: 280px;
+      max-height: 480px;
       overflow: auto;
-      border-radius: 18px;
+      margin: 0;
+      padding: 14px;
       border: 1px solid rgba(255, 255, 255, 0.06);
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0)),
-        #0d1217;
-      padding: 16px;
-      font: 13px/1.7 var(--mono);
-      color: #dbe3eb;
+      background: #081018;
+      color: #d7e5f4;
+      font: 13px/1.55 var(--mono);
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -952,159 +383,86 @@
       padding: 2px 0;
     }
 
-    .log-line.info {
-      color: #9ee7de;
+    .log-line.error {
+      color: #ff9696;
     }
 
     .log-line.warn {
-      color: #f1c78f;
+      color: #ffd39a;
     }
 
-    .log-line.error {
-      color: #f3a499;
+    .log-line.info {
+      color: #91f1ff;
     }
 
-    @media (max-width: 1240px) {
-      .hero,
-      .dashboard-grid,
-      .bottom-grid {
+    .protocol-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .protocol-list code,
+    .inline-code {
+      font-family: var(--mono);
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
+      padding: 2px 6px;
+      border-radius: 8px;
+    }
+
+    .subtle {
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    @media (max-width: 980px) {
+      .grid {
         grid-template-columns: 1fr;
-      }
-
-      .hero-side {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        align-items: stretch;
-      }
-
-      .beacon-block {
-        min-height: auto;
-      }
-    }
-
-    @media (max-width: 1080px) {
-      .control-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-
-      .scene-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        grid-template-areas:
-          "front front"
-          "tof4 tof1"
-          "core core"
-          "tof3 tof2"
-          "rear rear";
-      }
-
-      .core-card {
-        min-height: auto;
       }
     }
 
     @media (max-width: 760px) {
       .page {
-        width: min(100vw - 18px, 1480px);
-        padding-top: 14px;
-        gap: 14px;
+        width: min(100vw - 20px, 1320px);
+        padding-top: 18px;
       }
 
       .hero,
-      .scene-panel,
-      .telemetry-panel,
-      .matrix-panel,
-      .protocol-panel,
-      .strategy-panel,
-      .log-panel,
-      .control-deck {
+      .panel {
         padding: 16px;
       }
 
-      .hero-side,
-      .control-grid,
-      .telemetry-grid,
-      .matrix-grid,
-      .summary-bar,
-      .rules-grid,
-      .core-metrics {
+      .sensor-grid {
         grid-template-columns: 1fr;
-      }
-
-      .scene-grid {
-        grid-template-columns: 1fr;
-        grid-template-areas:
-          "front"
-          "tof4"
-          "tof1"
-          "core"
-          "tof3"
-          "tof2"
-          "rear";
-      }
-
-      .status-block,
-      .beacon-block {
-        min-height: auto;
-      }
-
-      .beacon-block {
-        align-items: flex-start;
-      }
-
-      .mode-hero {
-        font-size: 38px;
       }
     }
   </style>
 </head>
 <body>
   <div class="page">
-    <section class="hero panel">
-      <div class="hero-copy">
-        <span class="eyebrow">STM32H743 / USB CDC / Web Serial</span>
+    <section class="hero">
+      <div class="hero-top">
         <div>
-          <h1>H7 TOF Safety Console</h1>
-          <p class="lede">
-            这不是一页单纯的串口监视器，而是一张给安全冗余板做联调的中控台。页面会直接读取 STM32 的串口状态帧，
-            实时显示 4 路 TOF 的距离、当前参与保护的方向逻辑、急停来源、掩码变化和原始串口日志。
-          </p>
+          <span class="eyebrow">STM32 USB CDC / Web Serial</span>
+          <h1>H7 4璺?TOF 涓插彛鑱旇皟鍙?/h1>
+          <p class="subtitle">
+            杩欓〉鐢ㄤ簬鐩存帴浠庢祻瑙堝櫒璇诲彇 STM32 鐨勪覆鍙ｅ抚锛屽疄鏃舵樉绀?4 璺?TOF 璺濈銆佹€ュ仠浣嶃€佹湁鏁堜綅鍥惧拰鏁呴殰浣嶅浘銆?            褰撳墠浼樺厛鑱旈€氶摼璺拰娴嬭窛绋冲畾鎬э紝瀹夊叏绛栫暐鍚庣画鍐嶈ˉ銆?          </p>
         </div>
 
-        <div class="hero-pills">
-          <span class="hero-pill">安全窗口 363 mm ~ 419 mm</span>
-          <span class="hero-pill">兼容旧版与扩展版 H7TOF</span>
-          <span class="hero-pill">支持逐行 JSON 调试输入</span>
+        <div class="hero-side">
+          <div class="status-chip">
+            <span id="statusDot" class="status-dot"></span>
+            <span id="statusText">鏈繛鎺?/span>
+          </div>
+          <div class="notice">
+            寤鸿鐢?Edge 鎴?Chrome 閫氳繃 <span class="inline-code">http://localhost</span> 鎵撳紑鏈〉銆?            涓嶈鐩存帴鍙屽嚮 HTML銆?          </div>
         </div>
       </div>
 
-      <div class="hero-side">
-        <div id="connectionBlock" class="status-block">
-          <span id="statusDot" class="status-orb"></span>
-          <div>
-            <span class="mini-label">USB CDC 链路</span>
-            <strong id="statusText">未连接</strong>
-          </div>
-        </div>
-
-        <div id="estopBlock" class="beacon-block">
-          <div class="beacon-copy">
-            <span class="mini-label">急停提示灯</span>
-            <strong id="estopLampText">待机</strong>
-            <p>板端主动急停和外部急停都会让这里亮红，用于第一时间确认是安全链路拦下来的，还是外部线触发的。</p>
-          </div>
-          <span id="estopLamp" class="beacon-orb"></span>
-        </div>
-
-        <div class="note-card">
-          <span class="mini-label">联调提示</span>
-          <p>建议使用 Edge 或 Chrome，并通过 <code>http://localhost</code> 打开。网页和 ROS SDK 不能同时占用同一个串口。</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="control-deck panel">
-      <div class="control-grid">
-        <div class="control-field">
-          <label for="baudrate">串口波特率</label>
+      <div class="control-row">
+        <div class="field">
+          <label for="baudrate">涓插彛娉㈢壒鐜?/label>
           <select id="baudrate">
             <option value="115200" selected>115200</option>
             <option value="230400">230400</option>
@@ -1113,356 +471,194 @@
           </select>
         </div>
 
-        <div class="control-field">
-          <label for="decoderMode">解析模式</label>
+        <div class="field">
+          <label for="decoderMode">瑙ｆ瀽妯″紡</label>
           <select id="decoderMode">
-            <option value="auto" selected>自动识别</option>
-            <option value="h7tof">仅 H7TOF 文本帧</option>
-            <option value="json">仅 JSON 行</option>
+            <option value="auto" selected>鑷姩璇嗗埆</option>
+            <option value="h7tof">浠?H7TOF 鏂囨湰甯?/option>
+            <option value="json">浠?JSON 琛?/option>
           </select>
         </div>
 
-        <div class="control-field">
-          <label>串口操作</label>
-          <button id="connectButton" class="primary">连接串口</button>
+        <div class="field">
+          <label>涓插彛鎿嶄綔</label>
+          <button id="connectButton" class="primary">杩炴帴涓插彛</button>
         </div>
 
-        <div class="control-field">
-          <label>链路控制</label>
-          <button id="disconnectButton" class="danger" disabled>断开串口</button>
+        <div class="field">
+          <label>閾捐矾鎺у埗</label>
+          <button id="disconnectButton" class="danger" disabled>鏂紑涓插彛</button>
         </div>
 
-        <div class="control-field">
-          <label>辅助操作</label>
-          <button id="sampleButton" class="ghost">载入示例帧</button>
+        <div class="field">
+          <label>杈呭姪鎿嶄綔</label>
+          <button id="sampleButton" class="ghost">杞藉叆绀轰緥甯?/button>
         </div>
 
-        <div class="control-field">
-          <label>日志管理</label>
-          <button id="clearButton" class="ghost">清空日志</button>
+        <div class="field">
+          <label>鏃ュ織绠＄悊</label>
+          <button id="clearButton" class="ghost">娓呯┖鏃ュ織</button>
         </div>
       </div>
     </section>
 
-    <div class="dashboard-grid">
-      <section class="scene-panel panel">
-        <div class="section-head">
-          <div>
-            <span class="section-kicker">Protection View</span>
-            <h2>车体俯视安全图</h2>
-          </div>
-          <p class="section-note">
-            中间区域显示当前运动模式和关键掩码，四个角的传感器卡片与车体安装方位一一对应。
-          </p>
-        </div>
-
-        <div class="scene-grid">
-          <div class="scene-lane scene-front">Front</div>
-
-          <article id="tof4Card" class="sensor-card">
-            <div class="sensor-top">
-              <div>
-                <span class="sensor-zone">左前 / Left Front</span>
-                <h3 class="sensor-title">TOF4</h3>
-              </div>
-              <span id="tof4Badge" class="badge">等待数据</span>
+    <div class="grid">
+      <div class="left-stack">
+        <section class="panel">
+          <h2>閾捐矾鐘舵€?/h2>
+          <div class="stats">
+            <div class="stat-card">
+              <div class="stat-label">甯ц鏁?/div>
+              <div id="frameCount" class="stat-value">0</div>
             </div>
-            <div class="distance">
-              <strong id="tof4Distance">--</strong>
-              <span>mm</span>
+            <div class="stat-card">
+              <div class="stat-label">閿欒璁℃暟</div>
+              <div id="errorCount" class="stat-value">0</div>
             </div>
-            <div class="sensor-foot">
-              <span class="sensor-meta">折算距离<strong id="tof4Meters">--</strong></span>
-              <span class="sensor-meta">状态<strong id="tof4State">无帧</strong></span>
+            <div class="stat-card">
+              <div class="stat-label">浼扮畻甯х巼</div>
+              <div id="frameRate" class="stat-value">0.0 Hz</div>
             </div>
-          </article>
-
-          <article class="core-card">
-            <div class="core-top">
-              <div>
-                <span class="section-kicker">Safety Core</span>
-                <h3 class="core-title">方向保护总览</h3>
-                <p class="core-copy">
-                  当前方向下真正生效的 TOF 会在这里被重新归纳。前进只看前侧，后退只看后侧，转向和混合运动默认四路全开。
-                </p>
-              </div>
+            <div class="stat-card">
+              <div class="stat-label">搴忓彿</div>
+              <div id="seqValue" class="stat-value">--</div>
             </div>
-
-            <div class="core-mode">
-              <span class="mini-label">运动模式</span>
-              <p id="motionModeHero" class="mode-hero">--</p>
-              <div class="core-outline"></div>
-              <p id="sceneStatusText" class="core-status">等待串口数据。连接成功后，这里会总结当前保护方向与急停状态。</p>
+            <div class="stat-card">
+              <div class="stat-label">鎬ュ仠浣?/div>
+              <div id="estopValue" class="stat-value">0</div>
             </div>
-
-            <div class="core-footer">
-              <div class="core-metrics">
-                <div class="core-metric">
-                  <span>Seq</span>
-                  <strong id="seqHeroValue">--</strong>
-                </div>
-                <div class="core-metric">
-                  <span>Takeover</span>
-                  <strong id="takeoverHeroValue">0</strong>
-                </div>
-                <div class="core-metric">
-                  <span>Active</span>
-                  <strong id="activeMaskHero">0x00</strong>
-                </div>
-                <div class="core-metric">
-                  <span>Trip</span>
-                  <strong id="tripMaskHero">0x00</strong>
-                </div>
-              </div>
+            <div class="stat-card">
+              <div class="stat-label">Valid Mask</div>
+              <div id="validMaskValue" class="stat-value">0x00</div>
             </div>
-          </article>
-
-          <article id="tof1Card" class="sensor-card">
-            <div class="sensor-top">
-              <div>
-                <span class="sensor-zone">右前 / Right Front</span>
-                <h3 class="sensor-title">TOF1</h3>
-              </div>
-              <span id="tof1Badge" class="badge">等待数据</span>
+            <div class="stat-card">
+              <div class="stat-label">Fault Mask</div>
+              <div id="faultMaskValue" class="stat-value">0x00</div>
             </div>
-            <div class="distance">
-              <strong id="tof1Distance">--</strong>
-              <span>mm</span>
+            <div class="stat-card">
+              <div class="stat-label">Active Mask</div>
+              <div id="activeMaskValue" class="stat-value">0x00</div>
             </div>
-            <div class="sensor-foot">
-              <span class="sensor-meta">折算距离<strong id="tof1Meters">--</strong></span>
-              <span class="sensor-meta">状态<strong id="tof1State">无帧</strong></span>
+            <div class="stat-card">
+              <div class="stat-label">Motion Class</div>
+              <div id="motionClassValue" class="stat-value">LINK</div>
             </div>
-          </article>
-
-          <article id="tof3Card" class="sensor-card">
-            <div class="sensor-top">
-              <div>
-                <span class="sensor-zone">左后 / Left Rear</span>
-                <h3 class="sensor-title">TOF3</h3>
-              </div>
-              <span id="tof3Badge" class="badge">等待数据</span>
+            <div class="stat-card">
+              <div class="stat-label">Self Estop</div>
+              <div id="selfEstopValue" class="stat-value">0</div>
             </div>
-            <div class="distance">
-              <strong id="tof3Distance">--</strong>
-              <span>mm</span>
+            <div class="stat-card">
+              <div class="stat-label">External Estop</div>
+              <div id="externalEstopValue" class="stat-value">0</div>
             </div>
-            <div class="sensor-foot">
-              <span class="sensor-meta">折算距离<strong id="tof3Meters">--</strong></span>
-              <span class="sensor-meta">状态<strong id="tof3State">无帧</strong></span>
-            </div>
-          </article>
-
-          <article id="tof2Card" class="sensor-card">
-            <div class="sensor-top">
-              <div>
-                <span class="sensor-zone">右后 / Right Rear</span>
-                <h3 class="sensor-title">TOF2</h3>
-              </div>
-              <span id="tof2Badge" class="badge">等待数据</span>
-            </div>
-            <div class="distance">
-              <strong id="tof2Distance">--</strong>
-              <span>mm</span>
-            </div>
-            <div class="sensor-foot">
-              <span class="sensor-meta">折算距离<strong id="tof2Meters">--</strong></span>
-              <span class="sensor-meta">状态<strong id="tof2State">无帧</strong></span>
-            </div>
-          </article>
-
-          <div class="scene-lane scene-rear">Rear</div>
-        </div>
-      </section>
-
-      <div class="side-stack">
-        <section class="telemetry-panel panel">
-          <div class="section-head">
-            <div>
-              <span class="section-kicker">Telemetry</span>
-              <h2>链路遥测</h2>
-            </div>
-            <p class="section-note">这些值用于判断串口是否稳定、帧是否连续，以及当前急停是由板端还是外部触发。</p>
-          </div>
-
-          <div class="telemetry-grid">
-            <div class="telemetry-card">
-              <div class="telemetry-label">帧计数</div>
-              <div id="frameCount" class="telemetry-value">0</div>
-            </div>
-            <div class="telemetry-card">
-              <div class="telemetry-label">错误计数</div>
-              <div id="errorCount" class="telemetry-value">0</div>
-            </div>
-            <div class="telemetry-card">
-              <div class="telemetry-label">估算帧率</div>
-              <div id="frameRate" class="telemetry-value">0.0 Hz</div>
-            </div>
-            <div class="telemetry-card">
-              <div class="telemetry-label">最后更新</div>
-              <div id="lastUpdateValue" class="telemetry-value">--</div>
-            </div>
-            <div class="telemetry-card">
-              <div class="telemetry-label">总急停</div>
-              <div id="estopValue" class="telemetry-value">0</div>
-            </div>
-            <div class="telemetry-card">
-              <div class="telemetry-label">板端急停</div>
-              <div id="selfEstopValue" class="telemetry-value">0</div>
-            </div>
-            <div class="telemetry-card">
-              <div class="telemetry-label">外部急停</div>
-              <div id="externalEstopValue" class="telemetry-value">0</div>
-            </div>
-            <div class="telemetry-card">
-              <div class="telemetry-label">接管标志</div>
-              <div id="takeoverValue" class="telemetry-value">0</div>
+            <div class="stat-card">
+              <div class="stat-label">Last Update</div>
+              <div id="lastUpdateValue" class="stat-value">--</div>
             </div>
           </div>
         </section>
 
-        <section class="matrix-panel panel">
-          <div class="section-head">
-            <div>
-              <span class="section-kicker">Protection Matrix</span>
-              <h2>掩码与模式</h2>
-            </div>
-            <p class="section-note">这里保留全部关键值，不改变原有调试能力，但会把它们组织得更清楚。</p>
-          </div>
+        <section class="panel">
+          <h2>4 璺?TOF</h2>
+          <div class="sensor-grid">
+            <article class="sensor-card">
+              <div class="sensor-head">
+                <div>
+                  <p class="sensor-meta">Serial Channel 1</p>
+                  <h3 class="sensor-title">TOF1</h3>
+                </div>
+                <span id="tof1Badge" class="badge">绛夊緟鏁版嵁</span>
+              </div>
+              <div class="distance">
+                <strong id="tof1Distance">--</strong>
+                <span>mm</span>
+              </div>
+              <div class="sensor-foot">
+                <span class="sensor-meta">绫冲€?<span id="tof1Meters">--</span></span>
+                <span class="sensor-meta">鐘舵€?<span id="tof1State">鏃犲抚</span></span>
+              </div>
+            </article>
 
-          <div class="matrix-grid">
-            <div class="matrix-card">
-              <div class="matrix-label">生效掩码</div>
-              <div id="activeMaskValue" class="matrix-value">0x00</div>
-              <p class="matrix-caption">当前参与急停决策的 TOF 通道。</p>
-            </div>
-            <div class="matrix-card">
-              <div class="matrix-label">触发掩码</div>
-              <div id="tripMaskValue" class="matrix-value">0x00</div>
-              <p class="matrix-caption">正在主动拉起板端急停的通道。</p>
-            </div>
-            <div class="matrix-card">
-              <div class="matrix-label">有效掩码</div>
-              <div id="validMaskValue" class="matrix-value">0x00</div>
-              <p class="matrix-caption">当前拿到了有效距离值的通道。</p>
-            </div>
-            <div class="matrix-card">
-              <div class="matrix-label">故障掩码</div>
-              <div id="faultMaskValue" class="matrix-value">0x00</div>
-              <p class="matrix-caption">当前存在串口或帧异常的通道。</p>
-            </div>
-            <div class="matrix-card">
-              <div class="matrix-label">运动模式</div>
-              <div id="motionModeValue" class="matrix-value">--</div>
-              <p class="matrix-caption">由上位机下发的底盘运动信息推导而来。</p>
-            </div>
-            <div class="matrix-card">
-              <div class="matrix-label">安全窗口</div>
-              <div class="matrix-value">363~419</div>
-              <p class="matrix-caption">固定参考值 <span class="mono">391 mm ± 28 mm</span>。</p>
-            </div>
-          </div>
+            <article class="sensor-card">
+              <div class="sensor-head">
+                <div>
+                  <p class="sensor-meta">Serial Channel 2</p>
+                  <h3 class="sensor-title">TOF2</h3>
+                </div>
+                <span id="tof2Badge" class="badge">绛夊緟鏁版嵁</span>
+              </div>
+              <div class="distance">
+                <strong id="tof2Distance">--</strong>
+                <span>mm</span>
+              </div>
+              <div class="sensor-foot">
+                <span class="sensor-meta">绫冲€?<span id="tof2Meters">--</span></span>
+                <span class="sensor-meta">鐘舵€?<span id="tof2State">鏃犲抚</span></span>
+              </div>
+            </article>
 
-          <div class="summary-bar">
-            <div class="summary-chip">
-              <span>生效通道</span>
-              <strong id="activeSummary">0 / 4</strong>
-            </div>
-            <div class="summary-chip">
-              <span>触发通道</span>
-              <strong id="tripSummary">0 / 4</strong>
-            </div>
-            <div class="summary-chip">
-              <span>有效通道</span>
-              <strong id="validSummary">0 / 4</strong>
-            </div>
-            <div class="summary-chip">
-              <span>异常通道</span>
-              <strong id="faultSummary">0 / 4</strong>
-            </div>
-          </div>
-        </section>
+            <article class="sensor-card">
+              <div class="sensor-head">
+                <div>
+                  <p class="sensor-meta">Serial Channel 3</p>
+                  <h3 class="sensor-title">TOF3</h3>
+                </div>
+                <span id="tof3Badge" class="badge">绛夊緟鏁版嵁</span>
+              </div>
+              <div class="distance">
+                <strong id="tof3Distance">--</strong>
+                <span>mm</span>
+              </div>
+              <div class="sensor-foot">
+                <span class="sensor-meta">绫冲€?<span id="tof3Meters">--</span></span>
+                <span class="sensor-meta">鐘舵€?<span id="tof3State">鏃犲抚</span></span>
+              </div>
+            </article>
 
-        <section class="protocol-panel panel">
-          <div class="section-head">
-            <div>
-              <span class="section-kicker">Protocol</span>
-              <h2>协议与兼容说明</h2>
-            </div>
+            <article class="sensor-card">
+              <div class="sensor-head">
+                <div>
+                  <p class="sensor-meta">Serial Channel 4</p>
+                  <h3 class="sensor-title">TOF4</h3>
+                </div>
+                <span id="tof4Badge" class="badge">绛夊緟鏁版嵁</span>
+              </div>
+              <div class="distance">
+                <strong id="tof4Distance">--</strong>
+                <span>mm</span>
+              </div>
+              <div class="sensor-foot">
+                <span class="sensor-meta">绫冲€?<span id="tof4Meters">--</span></span>
+                <span class="sensor-meta">鐘舵€?<span id="tof4State">鏃犲抚</span></span>
+              </div>
+            </article>
           </div>
-
-          <ul class="protocol-list">
-            <li>推荐状态帧：<code>$H7TOF,seq,tof1,tof2,tof3,tof4,estop,self_estop,ext_estop,active_mask,trip_mask,valid_mask,fault_mask,motion_mode,takeover*CS</code></li>
-            <li>兼容旧版联调帧：<code>$H7TOF,seq,tof1,tof2,tof3,tof4,estop,valid_mask,fault_mask*CS</code></li>
-            <li>页面按行解析，支持 <code>\r\n</code>，也兼容单行 JSON。</li>
-            <li>无效距离建议发 <code>65535</code>，页面会显示为无效。</li>
-            <li>若开启 ROS SDK，请先关闭浏览器对该串口的占用。</li>
-          </ul>
         </section>
       </div>
-    </div>
 
-    <div class="bottom-grid">
-      <section class="strategy-panel panel">
-        <div class="section-head">
-          <div>
-            <span class="section-kicker">Strategy Snapshot</span>
-            <h2>方向策略速览</h2>
-          </div>
-          <p class="section-note">这是页面固定展示的判定规则，便于现场联调时快速对照是否与板端策略一致。</p>
-        </div>
+      <div class="right-stack">
+        <section class="panel">
+          <h2>鍗忚璇存槑</h2>
+          <ul class="protocol-list">
+            <li>鎺ㄨ崘 STM32 杈撳嚭鏍煎紡锛?code>$H7TOF,seq,tof1,tof2,tof3,tof4,estop,valid_mask,fault_mask,...,A=active_mask,M=motion_class,SE=self_estop,EE=external_estop*CS</code></li>
+            <li>鏈〉榛樿鎸夎瑙ｆ瀽锛屾敮鎸?<code>\r\n</code> 缁撳熬銆?/li>
+            <li>涔熷吋瀹瑰崟琛?JSON锛屼緥濡?<code>{"seq":1,"tof":[520,521,522,523],"estop":0,"valid_mask":"0F","fault_mask":"00","active_mask":"09","motion_class":1,"self_estop":0,"external_estop":0}</code></li>
+            <li>鏃犳晥璺濈寤鸿鍙?<code>65535</code>锛岄〉闈細鏄剧ず涓烘棤鏁堛€?/li>
+            <li>HTML 鍜?ROS1 鑺傜偣涓嶈兘鍚屾椂鍗犵敤鍚屼竴涓覆鍙ｃ€?/li>
+          </ul>
+        </section>
 
-        <div class="rules-grid">
-          <div class="rule-card">
-            <div class="rule-title">前进</div>
-            <strong>只看前侧</strong>
-            <p class="rule-copy">启用 <span class="mono">TOF1 + TOF4</span>，后方通道继续上报，但不再参与急停触发。</p>
-          </div>
-          <div class="rule-card">
-            <div class="rule-title">后退</div>
-            <strong>只看后侧</strong>
-            <p class="rule-copy">启用 <span class="mono">TOF2 + TOF3</span>，前方通道只做观测，不参与急停决策。</p>
-          </div>
-          <div class="rule-card">
-            <div class="rule-title">转向 / 混合运动</div>
-            <strong>四路全保护</strong>
-            <p class="rule-copy">只要存在转向、横移或混合运动，页面就应看到 <span class="mono">active_mask = 0x0F</span>。</p>
-          </div>
-          <div class="rule-card">
-            <div class="rule-title">失联保护</div>
-            <strong>回退到最保守</strong>
-            <p class="rule-copy">主机控制超时后按四路全保护处理，防止通信中断时出现安全盲区。</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="log-panel panel">
-        <div class="section-head">
-          <div>
-            <span class="section-kicker">Raw Stream</span>
-            <h2>原始串口日志</h2>
-          </div>
-          <p class="section-note">保留最近 200 行，用来排查断行、校验失败、字段缺失以及状态帧和控制流是否对得上。</p>
-        </div>
-        <div id="rawLog" class="raw-log"></div>
-      </section>
+        <section class="panel">
+          <h2>鍘熷涓插彛鏃ュ織</h2>
+          <p class="subtle">
+            杩欓噷淇濈暀鏈€杩?200 琛屻€傜敤浜庢鏌ヤ覆鍙ｆ湁娌℃湁鏂銆佹牎楠屽け璐ャ€佹牸寮忛敊璇垨瀛楁寮傚父銆?          </p>
+          <div id="rawLog" class="raw-log"></div>
+        </section>
+      </div>
     </div>
   </div>
 
   <script>
-    const SENSOR_COUNT = 4;
-    const INVALID_DISTANCE = 65535;
-    const SAFE_MIN = 363;
-    const SAFE_MAX = 419;
-    const MOTION_LABELS = {
-      0: "静止",
-      1: "前进",
-      2: "后退",
-      3: "转向",
-      4: "平移/混合",
-      5: "失联保护",
-    };
-
     const state = {
       port: null,
       reader: null,
@@ -1483,90 +679,38 @@
       sampleButton: document.getElementById("sampleButton"),
       baudrate: document.getElementById("baudrate"),
       decoderMode: document.getElementById("decoderMode"),
-      connectionBlock: document.getElementById("connectionBlock"),
-      estopBlock: document.getElementById("estopBlock"),
       statusDot: document.getElementById("statusDot"),
       statusText: document.getElementById("statusText"),
-      estopLamp: document.getElementById("estopLamp"),
-      estopLampText: document.getElementById("estopLampText"),
       frameCount: document.getElementById("frameCount"),
       errorCount: document.getElementById("errorCount"),
       frameRate: document.getElementById("frameRate"),
-      seqValue: document.getElementById("seqHeroValue"),
+      seqValue: document.getElementById("seqValue"),
       estopValue: document.getElementById("estopValue"),
-      selfEstopValue: document.getElementById("selfEstopValue"),
-      externalEstopValue: document.getElementById("externalEstopValue"),
-      activeMaskValue: document.getElementById("activeMaskValue"),
-      tripMaskValue: document.getElementById("tripMaskValue"),
       validMaskValue: document.getElementById("validMaskValue"),
       faultMaskValue: document.getElementById("faultMaskValue"),
-      motionModeValue: document.getElementById("motionModeValue"),
-      motionModeHero: document.getElementById("motionModeHero"),
-      takeoverValue: document.getElementById("takeoverValue"),
-      takeoverHeroValue: document.getElementById("takeoverHeroValue"),
-      activeMaskHero: document.getElementById("activeMaskHero"),
-      tripMaskHero: document.getElementById("tripMaskHero"),
-      sceneStatusText: document.getElementById("sceneStatusText"),
+      activeMaskValue: document.getElementById("activeMaskValue"),
+      motionClassValue: document.getElementById("motionClassValue"),
+      selfEstopValue: document.getElementById("selfEstopValue"),
+      externalEstopValue: document.getElementById("externalEstopValue"),
       lastUpdateValue: document.getElementById("lastUpdateValue"),
-      activeSummary: document.getElementById("activeSummary"),
-      tripSummary: document.getElementById("tripSummary"),
-      validSummary: document.getElementById("validSummary"),
-      faultSummary: document.getElementById("faultSummary"),
       rawLog: document.getElementById("rawLog"),
     };
 
     const sensorEls = [1, 2, 3, 4].map((index) => ({
-      card: document.getElementById(`tof${index}Card`),
       badge: document.getElementById(`tof${index}Badge`),
       distance: document.getElementById(`tof${index}Distance`),
       meters: document.getElementById(`tof${index}Meters`),
       state: document.getElementById(`tof${index}State`),
     }));
 
-    function countBits(value) {
-      let bits = 0;
-      let current = value & 0x0f;
-      while (current) {
-        bits += current & 1;
-        current >>= 1;
-      }
-      return bits;
-    }
-
     function setConnectionState(kind, text) {
-      els.statusDot.className = "status-orb";
-      els.connectionBlock.classList.remove("online", "fault");
-
+      els.statusDot.className = "status-dot";
       if (kind === "ok") {
         els.statusDot.classList.add("ok");
-        els.connectionBlock.classList.add("online");
       } else if (kind === "bad") {
         els.statusDot.classList.add("bad");
-        els.connectionBlock.classList.add("fault");
       }
-
       els.statusText.textContent = text;
-    }
-
-    function setEstopLamp(asserted, selfEstop, externalEstop) {
-      els.estopLamp.className = "beacon-orb";
-      els.estopBlock.classList.remove("active");
-      document.body.classList.toggle("estop-active", asserted);
-
-      if (asserted) {
-        els.estopLamp.classList.add("bad");
-        els.estopBlock.classList.add("active");
-      }
-
-      if (asserted && selfEstop && externalEstop) {
-        els.estopLampText.textContent = "板端 + 外部急停";
-      } else if (asserted && selfEstop) {
-        els.estopLampText.textContent = "板端主动急停";
-      } else if (asserted && externalEstop) {
-        els.estopLampText.textContent = "外部急停输入";
-      } else {
-        els.estopLampText.textContent = "待机";
-      }
     }
 
     function escapeHtml(value) {
@@ -1598,7 +742,6 @@
         els.frameRate.textContent = "0.0 Hz";
         return;
       }
-
       const span = (state.timestamps[state.timestamps.length - 1] - state.timestamps[0]) / 1000;
       const rate = span > 0 ? (state.timestamps.length - 1) / span : 0;
       els.frameRate.textContent = `${rate.toFixed(1)} Hz`;
@@ -1612,103 +755,67 @@
     }
 
     function formatDistance(value) {
-      if (value == null || Number.isNaN(value) || value < 0 || value >= INVALID_DISTANCE) {
+      if (value == null || Number.isNaN(value) || value < 0 || value >= 65535) {
         return "--";
       }
       return String(value);
     }
 
     function formatMeters(value) {
-      if (value == null || Number.isNaN(value) || value < 0 || value >= INVALID_DISTANCE) {
+      if (value == null || Number.isNaN(value) || value < 0 || value >= 65535) {
         return "--";
       }
       return `${(value / 1000).toFixed(3)} m`;
     }
 
-    function motionLabel(mode) {
-      return MOTION_LABELS[mode] ?? `未知(${mode})`;
+    function formatMotionClass(value) {
+      switch (value) {
+        case 0:
+          return "IDLE";
+        case 1:
+          return "FWD";
+        case 2:
+          return "REV";
+        case 3:
+          return "TURN";
+        case 4:
+          return "STRAFE";
+        case 5:
+          return "MIXED";
+        case 6:
+          return "LINK_LOSS";
+        default:
+          return "--";
+      }
     }
 
-    function buildSceneStatus(frame) {
-      const activeCount = countBits(frame.activeMask ?? 0);
-      const tripCount = countBits(frame.tripMask ?? 0);
-      const motion = motionLabel(frame.motionMode);
-
-      if (frame.estop === 1) {
-        if (frame.selfEstop === 1 && frame.externalEstop === 1) {
-          return `当前为 ${motion}，板端与外部急停同时成立；${tripCount} 路通道正在触发安全停机。`;
-        }
-        if (frame.selfEstop === 1) {
-          return `当前为 ${motion}，板端主动拉起急停；请先检查 trip_mask 和对应 TOF 的距离或有效性。`;
-        }
-        if (frame.externalEstop === 1) {
-          return `当前为 ${motion}，外部急停输入已经成立；本页仍继续显示当前掩码与 TOF 距离。`;
-        }
-      }
-
-      if (frame.activeMask === 0x09) {
-        return "当前处于前进保护，只有前侧 TOF1 与 TOF4 参与急停判定。";
-      }
-
-      if (frame.activeMask === 0x06) {
-        return "当前处于后退保护，只有后侧 TOF2 与 TOF3 参与急停判定。";
-      }
-
-      if ((frame.motionMode ?? 5) === 5) {
-        return "主机控制输入超时，系统已经回退到四路全保护的失联保护模式。";
-      }
-
-      if (activeCount === 4) {
-        return `当前为 ${motion}，四路 TOF 全部参与保护，安全窗口固定为 ${SAFE_MIN}~${SAFE_MAX} mm。`;
-      }
-
-      return `当前为 ${motion}，共有 ${activeCount} 路 TOF 参与保护。`;
-    }
-
-    function setSensorCard(index, frame) {
+    function setSensorCard(index, distance, validMask, faultMask) {
+      const valid = ((validMask >> index) & 0x01) === 1;
+      const fault = ((faultMask >> index) & 0x01) === 1;
       const sensor = sensorEls[index];
-      const valid = ((frame.validMask >> index) & 0x01) === 1;
-      const fault = ((frame.faultMask >> index) & 0x01) === 1;
-      const active = ((frame.activeMask >> index) & 0x01) === 1;
-      const trip = ((frame.tripMask >> index) & 0x01) === 1;
-      const distance = frame.tof[index];
 
-      sensor.card.className = "sensor-card";
       sensor.distance.textContent = formatDistance(distance);
       sensor.meters.textContent = formatMeters(distance);
 
-      let badgeText = "等待数据";
+      let text = "绛夊緟鏁版嵁";
       let badgeClass = "badge";
-      let stateText = "无帧";
 
-      if (trip) {
-        sensor.card.classList.add("tripped");
-        badgeClass = "badge bad";
-        badgeText = "触发急停";
-        stateText = valid ? "距离越界，当前正在触发急停" : "当前无有效帧，正在触发急停";
-      } else if (!active) {
-        sensor.card.classList.add("inactive");
-        badgeText = "已旁路";
-        stateText = "当前运动方向下不参与急停";
-      } else if (valid && !fault) {
-        sensor.card.classList.add("active");
+      if (valid && !fault) {
+        text = "鏈夋晥";
         badgeClass = "badge ok";
-        badgeText = "守护中";
-        stateText = "参与保护，距离值有效";
       } else if (valid && fault) {
-        sensor.card.classList.add("warning");
-        badgeText = "有帧异常";
-        stateText = "参与保护，但最近存在串口或帧异常";
-      } else {
-        sensor.card.classList.add("invalid");
+        text = "鏁呴殰";
         badgeClass = "badge bad";
-        badgeText = "无有效帧";
-        stateText = "参与保护，但当前没有有效距离";
+      } else if (!valid && fault) {
+        text = "鏃犳晥/鏁呴殰";
+        badgeClass = "badge bad";
+      } else if (!valid) {
+        text = "鏃犳晥";
       }
 
       sensor.badge.className = badgeClass;
-      sensor.badge.textContent = badgeText;
-      sensor.state.textContent = stateText;
+      sensor.badge.textContent = text;
+      sensor.state.textContent = text;
     }
 
     function updateDashboard(frame) {
@@ -1717,42 +824,24 @@
       updateCounters();
       updateFrameRate();
 
-      const motion = motionLabel(frame.motionMode);
-      const activeMaskText = formatMask(frame.activeMask);
-      const tripMaskText = formatMask(frame.tripMask);
-
       els.seqValue.textContent = String(frame.seq ?? "--");
       els.estopValue.textContent = String(frame.estop ?? 0);
-      els.selfEstopValue.textContent = String(frame.selfEstop ?? 0);
-      els.externalEstopValue.textContent = String(frame.externalEstop ?? 0);
-      els.activeMaskValue.textContent = activeMaskText;
-      els.tripMaskValue.textContent = tripMaskText;
       els.validMaskValue.textContent = formatMask(frame.validMask);
       els.faultMaskValue.textContent = formatMask(frame.faultMask);
-      els.motionModeValue.textContent = motion;
-      els.motionModeHero.textContent = motion;
-      els.takeoverValue.textContent = String(frame.takeover ?? 0);
-      els.takeoverHeroValue.textContent = String(frame.takeover ?? 0);
-      els.activeMaskHero.textContent = activeMaskText;
-      els.tripMaskHero.textContent = tripMaskText;
+      els.activeMaskValue.textContent = formatMask(frame.activeMask);
+      els.motionClassValue.textContent = formatMotionClass(frame.motionClass);
+      els.selfEstopValue.textContent = String(frame.selfEstop ?? 0);
+      els.externalEstopValue.textContent = String(frame.externalEstop ?? 0);
       els.lastUpdateValue.textContent = new Date().toLocaleTimeString();
-      els.sceneStatusText.textContent = buildSceneStatus(frame);
 
-      els.activeSummary.textContent = `${countBits(frame.activeMask ?? 0)} / 4`;
-      els.tripSummary.textContent = `${countBits(frame.tripMask ?? 0)} / 4`;
-      els.validSummary.textContent = `${countBits(frame.validMask ?? 0)} / 4`;
-      els.faultSummary.textContent = `${countBits(frame.faultMask ?? 0)} / 4`;
-
-      setEstopLamp(frame.estop === 1, frame.selfEstop === 1, frame.externalEstop === 1);
-
-      for (let i = 0; i < SENSOR_COUNT; i += 1) {
-        setSensorCard(i, frame);
+      for (let i = 0; i < 4; i += 1) {
+        setSensorCard(i, frame.tof[i], frame.validMask, frame.faultMask);
       }
 
       if (frame.estop === 1) {
-        setConnectionState("bad", "串口在线 / 急停触发");
+        setConnectionState("bad", "涓插彛鍦ㄧ嚎 / 鎬ュ仠瑙﹀彂");
       } else {
-        setConnectionState("ok", "串口在线 / 正常收帧");
+        setConnectionState("ok", "涓插彛鍦ㄧ嚎 / 姝ｅ父鏀跺抚");
       }
     }
 
@@ -1792,53 +881,36 @@
 
       const parts = payload.split(",").map((item) => item.trim());
       if (parts.length < 9) {
-        throw new Error("字段数量不足");
+        throw new Error("瀛楁鏁伴噺涓嶈冻");
       }
       if (parts[0] !== "H7TOF" && parts[0] !== "TOF") {
-        throw new Error("帧头不匹配");
+        throw new Error("甯уご涓嶅尮閰?);
       }
 
       if (checksumText) {
         const expected = Number.parseInt(checksumText, 16);
         const actual = xorChecksum(payload);
         if (expected !== actual) {
-          throw new Error(`checksum 失败: ${actual.toString(16).toUpperCase()} != ${checksumText.toUpperCase()}`);
+          throw new Error(`checksum 澶辫触: ${actual.toString(16).toUpperCase()} != ${checksumText.toUpperCase()}`);
         }
       }
 
-      const base = {
+      return {
         seq: parseInteger(parts[1]) ?? 0,
         tof: [
-          parseInteger(parts[2]) ?? INVALID_DISTANCE,
-          parseInteger(parts[3]) ?? INVALID_DISTANCE,
-          parseInteger(parts[4]) ?? INVALID_DISTANCE,
-          parseInteger(parts[5]) ?? INVALID_DISTANCE,
+          parseInteger(parts[2]) ?? 65535,
+          parseInteger(parts[3]) ?? 65535,
+          parseInteger(parts[4]) ?? 65535,
+          parseInteger(parts[5]) ?? 65535,
         ],
         estop: parseInteger(parts[6]) ?? 0,
-        selfEstop: 0,
-        externalEstop: 0,
-        activeMask: 0x0f,
-        tripMask: 0x00,
         validMask: parseInteger(parts[7]) ?? 0,
         faultMask: parseInteger(parts[8]) ?? 0,
-        motionMode: 5,
-        takeover: 0,
+        activeMask: parseInteger(parts.find((item) => item.startsWith("A="))?.slice(2)) ?? 0,
+        motionClass: parseInteger(parts.find((item) => item.startsWith("M="))?.slice(2)) ?? 6,
+        selfEstop: parseInteger(parts.find((item) => item.startsWith("SE="))?.slice(3)) ?? 0,
+        externalEstop: parseInteger(parts.find((item) => item.startsWith("EE="))?.slice(3)) ?? 0,
       };
-
-      if (parts.length >= 15) {
-        base.selfEstop = parseInteger(parts[7]) ?? 0;
-        base.externalEstop = parseInteger(parts[8]) ?? 0;
-        base.activeMask = parseInteger(parts[9]) ?? 0x0f;
-        base.tripMask = parseInteger(parts[10]) ?? 0x00;
-        base.validMask = parseInteger(parts[11]) ?? 0;
-        base.faultMask = parseInteger(parts[12]) ?? 0;
-        base.motionMode = parseInteger(parts[13]) ?? 5;
-        base.takeover = parseInteger(parts[14]) ?? 0;
-      } else {
-        base.selfEstop = base.estop;
-      }
-
-      return base;
     }
 
     function parseJsonLine(line) {
@@ -1848,21 +920,19 @@
         : [obj.tof1_mm, obj.tof2_mm, obj.tof3_mm, obj.tof4_mm];
 
       if (!Array.isArray(tofArray) || tofArray.length < 4) {
-        throw new Error("JSON 缺少 tof 数组");
+        throw new Error("JSON 缂哄皯 tof 鏁扮粍");
       }
 
       return {
         seq: parseInteger(obj.seq) ?? 0,
-        tof: tofArray.slice(0, 4).map((item) => parseInteger(item) ?? INVALID_DISTANCE),
+        tof: tofArray.slice(0, 4).map((item) => parseInteger(item) ?? 65535),
         estop: parseInteger(obj.estop) ?? 0,
-        selfEstop: parseInteger(obj.self_estop ?? obj.selfEstop ?? obj.estop) ?? 0,
-        externalEstop: parseInteger(obj.ext_estop ?? obj.external_estop ?? obj.externalEstop) ?? 0,
-        activeMask: parseInteger(obj.active_mask ?? obj.activeMask) ?? 0x0f,
-        tripMask: parseInteger(obj.trip_mask ?? obj.tripMask) ?? 0x00,
         validMask: parseInteger(obj.valid_mask ?? obj.validMask) ?? 0,
         faultMask: parseInteger(obj.fault_mask ?? obj.faultMask) ?? 0,
-        motionMode: parseInteger(obj.motion_mode ?? obj.motionMode) ?? 5,
-        takeover: parseInteger(obj.takeover ?? obj.takeover_enable ?? obj.takeoverEnable) ?? 0,
+        activeMask: parseInteger(obj.active_mask ?? obj.activeMask) ?? 0,
+        motionClass: parseInteger(obj.motion_class ?? obj.motionClass) ?? 6,
+        selfEstop: parseInteger(obj.self_estop ?? obj.selfEstop) ?? 0,
+        externalEstop: parseInteger(obj.external_estop ?? obj.externalEstop) ?? 0,
       };
     }
 
@@ -1877,7 +947,7 @@
 
       const text = line.trim();
       if (!text) {
-        throw new Error("空行");
+        throw new Error("绌鸿");
       }
       if (text.startsWith("{")) {
         return parseJsonLine(text);
@@ -1899,7 +969,7 @@
       } catch (error) {
         state.errorCount += 1;
         updateCounters();
-        appendLog(`解析失败: ${error.message}`, "error");
+        appendLog(`瑙ｆ瀽澶辫触: ${error.message}`, "error");
       }
     }
 
@@ -1919,7 +989,7 @@
         try {
           await state.reader.cancel();
         } catch (error) {
-          appendLog(`reader cancel 失败: ${error.message}`, "warn");
+          appendLog(`reader cancel 澶辫触: ${error.message}`, "warn");
         }
       }
 
@@ -1927,7 +997,7 @@
         try {
           await state.readLoopPromise;
         } catch (error) {
-          appendLog(`read loop 退出异常: ${error.message}`, "warn");
+          appendLog(`read loop 閫€鍑哄紓甯? ${error.message}`, "warn");
         }
       }
 
@@ -1935,7 +1005,7 @@
         try {
           await state.port.close();
         } catch (error) {
-          appendLog(`port close 失败: ${error.message}`, "warn");
+          appendLog(`port close 澶辫触: ${error.message}`, "warn");
         }
       }
 
@@ -1944,9 +1014,8 @@
       state.port = null;
       els.connectButton.disabled = false;
       els.disconnectButton.disabled = true;
-      setConnectionState("", "未连接");
-      setEstopLamp(false, false, false);
-      appendLog("串口已断开", "warn");
+      setConnectionState("", "鏈繛鎺?);
+      appendLog("涓插彛宸叉柇寮€", "warn");
     }
 
     async function readLoop() {
@@ -1970,8 +1039,8 @@
         if (state.keepReading) {
           state.errorCount += 1;
           updateCounters();
-          appendLog(`串口读取失败: ${error.message}`, "error");
-          setConnectionState("bad", "读取异常");
+          appendLog(`涓插彛璇诲彇澶辫触: ${error.message}`, "error");
+          setConnectionState("bad", "璇诲彇寮傚父");
         }
       } finally {
         if (state.reader) {
@@ -1984,14 +1053,14 @@
 
     async function connectSerial() {
       if (!("serial" in navigator)) {
-        appendLog("当前浏览器不支持 Web Serial", "error");
-        setConnectionState("bad", "浏览器不支持 Web Serial");
+        appendLog("褰撳墠娴忚鍣ㄤ笉鏀寔 Web Serial", "error");
+        setConnectionState("bad", "娴忚鍣ㄤ笉鏀寔 Web Serial");
         return;
       }
 
       if (!window.isSecureContext) {
-        appendLog("当前页面不是安全上下文，请改用 http://localhost 打开", "error");
-        setConnectionState("bad", "请用 localhost 打开本页");
+        appendLog("褰撳墠椤甸潰涓嶆槸瀹夊叏涓婁笅鏂囷紝璇锋敼鐢?http://localhost 鎵撳紑", "error");
+        setConnectionState("bad", "璇风敤 localhost 鎵撳紑鏈〉");
         return;
       }
 
@@ -2012,12 +1081,12 @@
         state.keepReading = true;
         els.connectButton.disabled = true;
         els.disconnectButton.disabled = false;
-        setConnectionState("", "串口已打开，等待首帧");
-        appendLog(`串口已连接，baud=${baudrate}`, "info");
+        setConnectionState("", "涓插彛宸叉墦寮€锛岀瓑寰呴甯?);
+        appendLog(`涓插彛宸茶繛鎺ワ紝baud=${baudrate}`, "info");
         state.readLoopPromise = readLoop();
       } catch (error) {
-        appendLog(`连接串口失败: ${error.message}`, "error");
-        setConnectionState("bad", "连接失败");
+        appendLog(`杩炴帴涓插彛澶辫触: ${error.message}`, "error");
+        setConnectionState("bad", "杩炴帴澶辫触");
       }
     }
 
@@ -2028,42 +1097,28 @@
       state.buffer = "";
       updateCounters();
       updateFrameRate();
-
       els.seqValue.textContent = "--";
       els.estopValue.textContent = "0";
-      els.selfEstopValue.textContent = "0";
-      els.externalEstopValue.textContent = "0";
-      els.activeMaskValue.textContent = "0x00";
-      els.tripMaskValue.textContent = "0x00";
       els.validMaskValue.textContent = "0x00";
       els.faultMaskValue.textContent = "0x00";
-      els.motionModeValue.textContent = "--";
-      els.motionModeHero.textContent = "--";
-      els.takeoverValue.textContent = "0";
-      els.takeoverHeroValue.textContent = "0";
-      els.activeMaskHero.textContent = "0x00";
-      els.tripMaskHero.textContent = "0x00";
+      els.activeMaskValue.textContent = "0x00";
+      els.motionClassValue.textContent = "LINK";
+      els.selfEstopValue.textContent = "0";
+      els.externalEstopValue.textContent = "0";
       els.lastUpdateValue.textContent = "--";
-      els.activeSummary.textContent = "0 / 4";
-      els.tripSummary.textContent = "0 / 4";
-      els.validSummary.textContent = "0 / 4";
-      els.faultSummary.textContent = "0 / 4";
-      els.sceneStatusText.textContent = "等待串口数据。连接成功后，这里会总结当前保护方向与急停状态。";
-      setEstopLamp(false, false, false);
 
       for (const sensor of sensorEls) {
-        sensor.card.className = "sensor-card";
         sensor.badge.className = "badge";
-        sensor.badge.textContent = "等待数据";
+        sensor.badge.textContent = "绛夊緟鏁版嵁";
         sensor.distance.textContent = "--";
         sensor.meters.textContent = "--";
-        sensor.state.textContent = "无帧";
+        sensor.state.textContent = "鏃犲抚";
       }
     }
 
     function injectSampleFrame() {
-      handleLine("$H7TOF,17,390,395,65535,392,1,1,0,0F,04,0B,04,3,1");
-      appendLog("已注入示例帧", "warn");
+      handleLine("$H7TOF,17,523,518,65535,521,0,0B,04,R=10/10/10/10,F=3/3/3/3,S=0/0/0/0,C=0/0/0/0,E=0/0/0/0,L=FF/FF/FF/FF,A=09,M=1,SE=0,EE=0*3A");
+      appendLog("宸叉敞鍏ョず渚嬪抚", "warn");
     }
 
     els.connectButton.addEventListener("click", connectSerial);
@@ -2073,18 +1128,20 @@
       state.logLines = [];
       els.rawLog.innerHTML = "";
       resetDashboard();
-      appendLog("日志和页面状态已清空", "warn");
+      appendLog("鏃ュ織鍜岄〉闈㈢姸鎬佸凡娓呯┖", "warn");
     });
 
     if ("serial" in navigator) {
       navigator.serial.addEventListener("disconnect", () => {
-        appendLog("检测到串口设备断开", "warn");
+        appendLog("妫€娴嬪埌涓插彛璁惧鏂紑", "warn");
         disconnectSerial();
       });
     }
 
     resetDashboard();
-    appendLog("页面已加载。请通过 http://localhost 打开，并确认串口没有被 ROS SDK 占用。", "info");
+    appendLog("椤甸潰宸插姞杞姐€傝嫢娴忚鍣ㄦ彁绀轰笉鏀寔锛岃鏀圭敤 Edge/Chrome锛屽苟閫氳繃 http://localhost 鎵撳紑銆?, "info");
   </script>
 </body>
 </html>
+
+
