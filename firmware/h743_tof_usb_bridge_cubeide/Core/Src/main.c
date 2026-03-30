@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : H743 4-channel TOF safety bridge firmware
+  * @brief          : H743 4-channel TOF USB bridge bring-up firmware
   ******************************************************************************
   */
 
@@ -14,42 +14,34 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define TOF_CHANNEL_COUNT                  4U
-#define TOF_FRAME_LENGTH                   4U
-#define TOF_INVALID_DISTANCE_MM            65535U
-#define TOF_INTERBYTE_TIMEOUT_MS           10U
-#define TOF_FRAME_TIMEOUT_MS               120U
-#define TOF_USB_REPORT_PERIOD_MS           30U
-#define APP_LED_TOGGLE_PERIOD_MS           250U
-#define APP_ESTOP_RELEASED                 0U
-#define APP_ESTOP_ASSERTED                 1U
-#define APP_CONTROL_TIMEOUT_MS             200U
-#define APP_AUTO_RELEASE_STABLE_MS         80U
-#define APP_CONTROL_LINEAR_DEADBAND_MMPS   20
-#define APP_CONTROL_YAW_DEADBAND_MRADPS    50
-#define APP_USB_LINE_BUFFER_SIZE           128U
-#define APP_TOF_REFERENCE_MM               391U
-#define APP_TOF_SAFE_DELTA_MM              28U
-#define APP_TOF_SAFE_MIN_MM                (APP_TOF_REFERENCE_MM - APP_TOF_SAFE_DELTA_MM)
-#define APP_TOF_SAFE_MAX_MM                (APP_TOF_REFERENCE_MM + APP_TOF_SAFE_DELTA_MM)
-#define APP_TOF_FRONT_MASK                 0x09U
-#define APP_TOF_REAR_MASK                  0x06U
-#define APP_TOF_ALL_MASK                   0x0FU
+#define TOF_CHANNEL_COUNT            4U
+#define TOF_FRAME_LENGTH             4U
+#define TOF_INVALID_DISTANCE_MM      65535U
+#define TOF_INTERBYTE_TIMEOUT_MS     10U
+#define TOF_FRAME_TIMEOUT_MS         120U
+#define CONTROL_INPUT_TIMEOUT_MS     200U
+#define CONTROL_LINE_BUFFER_SIZE     64U
+#define TOF_USB_REPORT_PERIOD_MS     30U
+#define APP_LED_TOGGLE_PERIOD_MS     250U
+#define APP_ESTOP_RELEASED           0U
+#define APP_ESTOP_ASSERTED           1U
+#define TOF_SAFE_BASELINE_MM         391U
+#define TOF_SAFE_TOLERANCE_MM        28U
+#define TOF_SAFE_MIN_MM              (TOF_SAFE_BASELINE_MM - TOF_SAFE_TOLERANCE_MM)
+#define TOF_SAFE_MAX_MM              (TOF_SAFE_BASELINE_MM + TOF_SAFE_TOLERANCE_MM)
+#define TOF_MASK_1                   0x01U
+#define TOF_MASK_2                   0x02U
+#define TOF_MASK_3                   0x04U
+#define TOF_MASK_4                   0x08U
+#define TOF_MASK_ALL                 (TOF_MASK_1 | TOF_MASK_2 | TOF_MASK_3 | TOF_MASK_4)
+#define TOF_MASK_FORWARD             (TOF_MASK_1 | TOF_MASK_4)
+#define TOF_MASK_REVERSE             (TOF_MASK_2 | TOF_MASK_3)
+#define CONTROL_EPSILON              0.001f
 
-#define ESTOP_OUT_GPIO_Port                GPIOE
-#define ESTOP_OUT_Pin                      GPIO_PIN_10
-#define ESTOP_IN_GPIO_Port                 GPIOE
-#define ESTOP_IN_Pin                       GPIO_PIN_11
-
-typedef enum
-{
-  APP_MOTION_IDLE = 0U,
-  APP_MOTION_FORWARD = 1U,
-  APP_MOTION_REVERSE = 2U,
-  APP_MOTION_TURNING = 3U,
-  APP_MOTION_PLANAR = 4U,
-  APP_MOTION_FAILSAFE = 5U,
-} AppMotionMode;
+#define ESTOP_OUT_GPIO_Port          GPIOE
+#define ESTOP_OUT_Pin                GPIO_PIN_10
+#define ESTOP_IN_GPIO_Port           GPIOE
+#define ESTOP_IN_Pin                 GPIO_PIN_11
 
 typedef struct
 {
@@ -70,43 +62,26 @@ typedef struct
   uint8_t consecutive_failures;
 } TofChannelContext;
 
-typedef struct
+typedef enum
 {
-  uint32_t seq;
-  int32_t vx_mmps;
-  int32_t vy_mmps;
-  int32_t wz_mradps;
-  uint8_t release_req;
-  uint8_t takeover_enable;
-} AppControlFrame;
+  APP_MOTION_IDLE = 0,
+  APP_MOTION_FORWARD = 1,
+  APP_MOTION_REVERSE = 2,
+  APP_MOTION_TURN = 3,
+  APP_MOTION_STRAFE = 4,
+  APP_MOTION_MIXED = 5,
+  APP_MOTION_LINK_LOSS = 6
+} AppMotionClass;
 
 typedef struct
 {
-  uint16_t distance_mm[TOF_CHANNEL_COUNT];
+  uint8_t motion_class;
+  uint8_t active_mask;
   uint8_t valid_mask;
   uint8_t fault_mask;
-  uint8_t active_mask;
-  uint8_t trip_mask;
   uint8_t self_estop;
   uint8_t external_estop;
-  uint8_t estop;
-  uint8_t motion_mode;
-  uint8_t takeover_enabled;
 } AppSafetyState;
-
-typedef struct
-{
-  volatile uint32_t seq;
-  volatile int32_t vx_mmps;
-  volatile int32_t vy_mmps;
-  volatile int32_t wz_mradps;
-  volatile uint8_t takeover_enable;
-  volatile uint8_t valid;
-  volatile uint32_t last_update_tick;
-  volatile uint32_t rx_frame_count;
-  volatile uint16_t parse_errors;
-  volatile uint16_t checksum_errors;
-} AppHostControlState;
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
@@ -121,18 +96,16 @@ static TofChannelContext g_tof_channels[TOF_CHANNEL_COUNT] =
   { .uart = &huart2, .distance_mm = TOF_INVALID_DISTANCE_MM },
 };
 
-static volatile AppHostControlState g_host_control = {0};
-static AppSafetyState g_safety_state = {0};
 static uint32_t g_usb_sequence = 0U;
 static uint32_t g_last_report_tick = 0U;
 static uint32_t g_last_led_tick = 0U;
 static uint8_t g_estop_state = APP_ESTOP_RELEASED;
-static uint8_t g_self_estop_latched = 0U;
-static uint8_t g_release_request_pending = 0U;
-static uint32_t g_last_trip_tick = 0U;
-static char g_usb_line_buffer[APP_USB_LINE_BUFFER_SIZE];
-static uint16_t g_usb_line_length = 0U;
-static uint8_t g_usb_line_overflow = 0U;
+static uint32_t g_last_control_tick = 0U;
+static uint8_t g_has_control_input = 0U;
+static AppMotionClass g_motion_class = APP_MOTION_LINK_LOSS;
+static AppSafetyState g_safety_state = {0};
+static char g_control_line[CONTROL_LINE_BUFFER_SIZE];
+static uint32_t g_control_line_length = 0U;
 
 static void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
@@ -142,28 +115,30 @@ static void MX_USART3_UART_Init(void);
 static void MX_USART6_UART_Init(void);
 static void APP_Init(void);
 static void APP_Poll(void);
-static void APP_ReportFrame(void);
-static void APP_UpdateSafetyState(uint32_t now);
-static uint8_t APP_DistanceInSafeWindow(uint16_t distance_mm);
-static uint8_t APP_DetermineMotionMode(uint32_t now);
-static uint8_t APP_ActiveMaskForMotion(uint8_t motion_mode);
+static void APP_ReportFrame(uint32_t now);
 static void APP_StartChannelReceive(TofChannelContext *channel);
 static void APP_ProcessChannelByte(TofChannelContext *channel, uint8_t byte, uint32_t now);
 static uint8_t APP_ChannelValid(const TofChannelContext *channel, uint32_t now);
-static uint8_t APP_ChannelFault(const TofChannelContext *channel, uint32_t now);
 static uint16_t APP_ChannelDistance(const TofChannelContext *channel, uint32_t now);
 static uint8_t APP_CalcChecksum(const char *payload);
 static void APP_SetEstop(uint8_t asserted);
 static uint8_t APP_ExternalEstopRequested(void);
 static TofChannelContext *APP_FindChannel(UART_HandleTypeDef *huart);
 static void APP_UART_CommonInit(UART_HandleTypeDef *huart, USART_TypeDef *instance);
-static void APP_HandleUsbRx(const uint8_t *data, uint32_t len);
-static void APP_ProcessUsbByte(uint8_t byte);
-static void APP_ProcessControlLine(const char *line);
-static uint8_t APP_ParseControlFrame(const char *line, AppControlFrame *frame);
-static int32_t APP_ParseInt32(const char *text, uint8_t *ok);
-static uint32_t APP_ParseUint32(const char *text, uint8_t *ok);
-static uint32_t APP_Abs32(int32_t value);
+static void APP_EvaluateSafety(uint32_t now, AppSafetyState *state);
+static uint8_t APP_ChannelOutOfWindow(const TofChannelContext *channel, uint32_t now);
+static AppMotionClass APP_GetEffectiveMotionClass(uint32_t now);
+static uint8_t APP_GetActiveMask(AppMotionClass motion_class);
+static void APP_ParseControlLine(char *line, uint32_t now);
+static uint8_t APP_ParseControlJson(const char *line, AppMotionClass *motion_class);
+static uint8_t APP_ParseControlText(const char *line, AppMotionClass *motion_class);
+static AppMotionClass APP_DeriveMotionClass(float vx, float vy, float wz);
+static uint8_t APP_TryReadJsonString(const char *json, const char *key, char *out, uint32_t out_size);
+static uint8_t APP_TryReadJsonFloat(const char *json, const char *key, float *value);
+static uint8_t APP_ParseFloatTriplet(const char *line, float *vx, float *vy, float *wz);
+static int32_t APP_Stricmp(const char *left, const char *right);
+static char *APP_Trim(char *text);
+static const char *APP_SkipWhitespace(const char *text);
 
 int main(void)
 {
@@ -196,13 +171,13 @@ static void APP_Init(void)
 
   APP_SetEstop(APP_ESTOP_RELEASED);
   LED1_OFF;
-  USB_RegisterRxCallback(APP_HandleUsbRx);
 
   g_last_report_tick = now;
   g_last_led_tick = now;
-  g_last_trip_tick = now;
-  g_safety_state.active_mask = APP_TOF_ALL_MASK;
-  g_safety_state.motion_mode = APP_MOTION_FAILSAFE;
+  g_last_control_tick = now;
+  g_has_control_input = 0U;
+  g_motion_class = APP_MOTION_LINK_LOSS;
+  g_control_line_length = 0U;
 
   for (index = 0U; index < TOF_CHANNEL_COUNT; ++index)
   {
@@ -220,28 +195,19 @@ static void APP_Init(void)
     g_tof_channels[index].consecutive_failures = 0U;
     APP_StartChannelReceive(&g_tof_channels[index]);
   }
-
-  APP_UpdateSafetyState(now);
-  APP_SetEstop(g_safety_state.estop);
 }
 
 static void APP_Poll(void)
 {
   uint32_t now = HAL_GetTick();
 
-  APP_UpdateSafetyState(now);
-  APP_SetEstop(g_safety_state.estop);
+  APP_EvaluateSafety(now, &g_safety_state);
+  APP_SetEstop((g_safety_state.self_estop != 0U) || (g_safety_state.external_estop != 0U));
 
   if ((now - g_last_report_tick) >= TOF_USB_REPORT_PERIOD_MS)
   {
     g_last_report_tick = now;
-    APP_ReportFrame();
-  }
-
-  if (g_safety_state.estop != 0U)
-  {
-    LED1_ON;
-    return;
+    APP_ReportFrame(now);
   }
 
   if ((now - g_last_led_tick) >= APP_LED_TOGGLE_PERIOD_MS)
@@ -251,29 +217,32 @@ static void APP_Poll(void)
   }
 }
 
-static void APP_ReportFrame(void)
+static void APP_ReportFrame(uint32_t now)
 {
-  char payload[384];
-  AppSafetyState snapshot = g_safety_state;
+  char payload[256];
+  char frame_line[320];
+  uint16_t distance_mm[TOF_CHANNEL_COUNT];
+  uint32_t index;
+
+  APP_EvaluateSafety(now, &g_safety_state);
+
+  for (index = 0U; index < TOF_CHANNEL_COUNT; ++index)
+  {
+    distance_mm[index] = APP_ChannelDistance(&g_tof_channels[index], now);
+  }
 
   (void)snprintf(
       payload,
       sizeof(payload),
-      "H7TOF,%lu,%u,%u,%u,%u,%u,%u,%u,%02X,%02X,%02X,%02X,%u,%u,R=%lu/%lu/%lu/%lu,F=%lu/%lu/%lu/%lu,S=%u/%u/%u/%u,C=%u/%u/%u/%u,E=%u/%u/%u/%u,L=%02X/%02X/%02X/%02X,H=%lu/%u/%u",
+      "H7TOF,%lu,%u,%u,%u,%u,%u,%02X,%02X,R=%lu/%lu/%lu/%lu,F=%lu/%lu/%lu/%lu,S=%u/%u/%u/%u,C=%u/%u/%u/%u,E=%u/%u/%u/%u,L=%02X/%02X/%02X/%02X",
       (unsigned long)g_usb_sequence++,
-      (unsigned int)snapshot.distance_mm[0],
-      (unsigned int)snapshot.distance_mm[1],
-      (unsigned int)snapshot.distance_mm[2],
-      (unsigned int)snapshot.distance_mm[3],
-      (unsigned int)snapshot.estop,
-      (unsigned int)snapshot.self_estop,
-      (unsigned int)snapshot.external_estop,
-      (unsigned int)snapshot.active_mask,
-      (unsigned int)snapshot.trip_mask,
-      (unsigned int)snapshot.valid_mask,
-      (unsigned int)snapshot.fault_mask,
-      (unsigned int)snapshot.motion_mode,
-      (unsigned int)snapshot.takeover_enabled,
+      (unsigned int)distance_mm[0],
+      (unsigned int)distance_mm[1],
+      (unsigned int)distance_mm[2],
+      (unsigned int)distance_mm[3],
+      (unsigned int)g_estop_state,
+      (unsigned int)g_safety_state.valid_mask,
+      (unsigned int)g_safety_state.fault_mask,
       (unsigned long)g_tof_channels[0].rx_count,
       (unsigned long)g_tof_channels[1].rx_count,
       (unsigned long)g_tof_channels[2].rx_count,
@@ -297,139 +266,19 @@ static void APP_ReportFrame(void)
       (unsigned int)g_tof_channels[0].last_byte,
       (unsigned int)g_tof_channels[1].last_byte,
       (unsigned int)g_tof_channels[2].last_byte,
-      (unsigned int)g_tof_channels[3].last_byte,
-      (unsigned long)g_host_control.rx_frame_count,
-      (unsigned int)g_host_control.parse_errors,
-      (unsigned int)g_host_control.checksum_errors);
+      (unsigned int)g_tof_channels[3].last_byte);
 
-  USB_printf("$%s*%02X\r\n", payload, APP_CalcChecksum(payload));
-}
+  (void)snprintf(
+      frame_line,
+      sizeof(frame_line),
+      "%s,A=%02X,M=%u,SE=%u,EE=%u",
+      payload,
+      (unsigned int)g_safety_state.active_mask,
+      (unsigned int)g_safety_state.motion_class,
+      (unsigned int)g_safety_state.self_estop,
+      (unsigned int)g_safety_state.external_estop);
 
-static void APP_UpdateSafetyState(uint32_t now)
-{
-  AppSafetyState next = {0};
-  uint32_t index;
-
-  next.motion_mode = APP_DetermineMotionMode(now);
-  next.active_mask = APP_ActiveMaskForMotion(next.motion_mode);
-  next.takeover_enabled = ((g_host_control.valid != 0U) &&
-                           ((now - g_host_control.last_update_tick) <= APP_CONTROL_TIMEOUT_MS) &&
-                           (g_host_control.takeover_enable != 0U)) ? 1U : 0U;
-  next.external_estop = APP_ExternalEstopRequested();
-
-  for (index = 0U; index < TOF_CHANNEL_COUNT; ++index)
-  {
-    uint8_t bit = (uint8_t)(1U << index);
-    uint8_t valid = APP_ChannelValid(&g_tof_channels[index], now);
-    uint16_t distance = APP_ChannelDistance(&g_tof_channels[index], now);
-
-    next.distance_mm[index] = distance;
-
-    if (valid != 0U)
-    {
-      next.valid_mask |= bit;
-    }
-
-    if (APP_ChannelFault(&g_tof_channels[index], now) != 0U)
-    {
-      next.fault_mask |= bit;
-    }
-
-    if ((next.active_mask & bit) == 0U)
-    {
-      continue;
-    }
-
-    if ((valid == 0U) || (APP_DistanceInSafeWindow(distance) == 0U))
-    {
-      next.trip_mask |= bit;
-    }
-  }
-
-  if (next.trip_mask != 0U)
-  {
-    g_self_estop_latched = 1U;
-    g_last_trip_tick = now;
-  }
-  else if (g_self_estop_latched != 0U)
-  {
-    if ((g_release_request_pending != 0U) || ((now - g_last_trip_tick) >= APP_AUTO_RELEASE_STABLE_MS))
-    {
-      g_self_estop_latched = 0U;
-    }
-  }
-
-  g_release_request_pending = 0U;
-  next.self_estop = g_self_estop_latched;
-  next.estop = ((next.external_estop != 0U) || (next.self_estop != 0U)) ? 1U : 0U;
-  g_safety_state = next;
-}
-
-static uint8_t APP_DistanceInSafeWindow(uint16_t distance_mm)
-{
-  if (distance_mm == TOF_INVALID_DISTANCE_MM)
-  {
-    return 0U;
-  }
-
-  return ((distance_mm >= APP_TOF_SAFE_MIN_MM) && (distance_mm <= APP_TOF_SAFE_MAX_MM)) ? 1U : 0U;
-}
-
-static uint8_t APP_DetermineMotionMode(uint32_t now)
-{
-  int32_t vx_mmps;
-  int32_t vy_mmps;
-  int32_t wz_mradps;
-
-  if ((g_host_control.valid == 0U) || ((now - g_host_control.last_update_tick) > APP_CONTROL_TIMEOUT_MS))
-  {
-    return APP_MOTION_FAILSAFE;
-  }
-
-  vx_mmps = g_host_control.vx_mmps;
-  vy_mmps = g_host_control.vy_mmps;
-  wz_mradps = g_host_control.wz_mradps;
-
-  if (APP_Abs32(wz_mradps) >= (uint32_t)APP_CONTROL_YAW_DEADBAND_MRADPS)
-  {
-    return APP_MOTION_TURNING;
-  }
-
-  if (APP_Abs32(vy_mmps) >= (uint32_t)APP_CONTROL_LINEAR_DEADBAND_MMPS)
-  {
-    return APP_MOTION_PLANAR;
-  }
-
-  if (vx_mmps > APP_CONTROL_LINEAR_DEADBAND_MMPS)
-  {
-    return APP_MOTION_FORWARD;
-  }
-
-  if (vx_mmps < (-APP_CONTROL_LINEAR_DEADBAND_MMPS))
-  {
-    return APP_MOTION_REVERSE;
-  }
-
-  return APP_MOTION_IDLE;
-}
-
-static uint8_t APP_ActiveMaskForMotion(uint8_t motion_mode)
-{
-  switch (motion_mode)
-  {
-    case APP_MOTION_FORWARD:
-      return APP_TOF_FRONT_MASK;
-
-    case APP_MOTION_REVERSE:
-      return APP_TOF_REAR_MASK;
-
-    case APP_MOTION_TURNING:
-    case APP_MOTION_PLANAR:
-    case APP_MOTION_IDLE:
-    case APP_MOTION_FAILSAFE:
-    default:
-      return APP_TOF_ALL_MASK;
-  }
+  USB_printf("$%s*%02X\r\n", frame_line, APP_CalcChecksum(frame_line));
 }
 
 static void APP_StartChannelReceive(TofChannelContext *channel)
@@ -521,19 +370,22 @@ static uint8_t APP_ChannelValid(const TofChannelContext *channel, uint32_t now)
   return 1U;
 }
 
-static uint8_t APP_ChannelFault(const TofChannelContext *channel, uint32_t now)
+static uint8_t APP_ChannelOutOfWindow(const TofChannelContext *channel, uint32_t now)
 {
-  if (channel == NULL)
-  {
-    return 1U;
-  }
+  uint16_t distance_mm;
 
   if (APP_ChannelValid(channel, now) == 0U)
   {
     return 1U;
   }
 
-  return (channel->consecutive_failures > 0U) ? 1U : 0U;
+  distance_mm = channel->distance_mm;
+  if ((distance_mm < TOF_SAFE_MIN_MM) || (distance_mm > TOF_SAFE_MAX_MM))
+  {
+    return 1U;
+  }
+
+  return 0U;
 }
 
 static uint16_t APP_ChannelDistance(const TofChannelContext *channel, uint32_t now)
@@ -573,6 +425,51 @@ static uint8_t APP_ExternalEstopRequested(void)
   return (HAL_GPIO_ReadPin(ESTOP_IN_GPIO_Port, ESTOP_IN_Pin) == GPIO_PIN_RESET) ? 1U : 0U;
 }
 
+void APP_ControlInput(const uint8_t *data, uint32_t length)
+{
+  uint32_t index;
+
+  if (data == NULL)
+  {
+    return;
+  }
+
+  for (index = 0U; index < length; ++index)
+  {
+    char ch = (char)data[index];
+
+    if (ch == '\r')
+    {
+      continue;
+    }
+
+    if (ch == '\n')
+    {
+      if (g_control_line_length > 0U)
+      {
+        g_control_line[g_control_line_length] = '\0';
+        APP_ParseControlLine(g_control_line, HAL_GetTick());
+        g_control_line_length = 0U;
+      }
+      continue;
+    }
+
+    if ((uint8_t)ch < 0x20U)
+    {
+      continue;
+    }
+
+    if (g_control_line_length < (CONTROL_LINE_BUFFER_SIZE - 1U))
+    {
+      g_control_line[g_control_line_length++] = ch;
+    }
+    else
+    {
+      g_control_line_length = 0U;
+    }
+  }
+}
+
 static TofChannelContext *APP_FindChannel(UART_HandleTypeDef *huart)
 {
   uint32_t index;
@@ -588,248 +485,408 @@ static TofChannelContext *APP_FindChannel(UART_HandleTypeDef *huart)
   return NULL;
 }
 
-static void APP_HandleUsbRx(const uint8_t *data, uint32_t len)
+static void APP_EvaluateSafety(uint32_t now, AppSafetyState *state)
 {
   uint32_t index;
 
-  if (data == NULL)
+  if (state == NULL)
   {
     return;
   }
 
-  for (index = 0U; index < len; ++index)
-  {
-    APP_ProcessUsbByte(data[index]);
-  }
-}
+  state->motion_class = (uint8_t)APP_GetEffectiveMotionClass(now);
+  state->active_mask = APP_GetActiveMask((AppMotionClass)state->motion_class);
+  state->valid_mask = 0U;
+  state->fault_mask = 0U;
 
-static void APP_ProcessUsbByte(uint8_t byte)
-{
-  if ((byte == '\r') || (byte == '\n'))
+  for (index = 0U; index < TOF_CHANNEL_COUNT; ++index)
   {
-    if ((g_usb_line_length > 0U) && (g_usb_line_overflow == 0U))
+    uint8_t bit = (uint8_t)(1U << index);
+
+    if (APP_ChannelValid(&g_tof_channels[index], now) != 0U)
     {
-      g_usb_line_buffer[g_usb_line_length] = '\0';
-      APP_ProcessControlLine(g_usb_line_buffer);
+      state->valid_mask |= bit;
     }
-    else if (g_usb_line_overflow != 0U)
+
+    if ((state->active_mask & bit) != 0U)
     {
-      if (g_host_control.parse_errors < 0xFFFFU)
+      if (APP_ChannelOutOfWindow(&g_tof_channels[index], now) != 0U)
       {
-        g_host_control.parse_errors++;
+        state->fault_mask |= bit;
       }
     }
-
-    g_usb_line_length = 0U;
-    g_usb_line_overflow = 0U;
-    return;
   }
 
-  if (g_usb_line_overflow != 0U)
-  {
-    return;
-  }
-
-  if ((g_usb_line_length + 1U) >= APP_USB_LINE_BUFFER_SIZE)
-  {
-    g_usb_line_overflow = 1U;
-    return;
-  }
-
-  g_usb_line_buffer[g_usb_line_length++] = (char)byte;
+  state->self_estop = (state->fault_mask != 0U) ? 1U : 0U;
+  state->external_estop = APP_ExternalEstopRequested();
 }
 
-static void APP_ProcessControlLine(const char *line)
+static AppMotionClass APP_GetEffectiveMotionClass(uint32_t now)
 {
-  AppControlFrame frame;
-
-  if (APP_ParseControlFrame(line, &frame) == 0U)
+  if ((g_has_control_input == 0U) || ((now - g_last_control_tick) > CONTROL_INPUT_TIMEOUT_MS))
   {
-    if (g_host_control.parse_errors < 0xFFFFU)
-    {
-      g_host_control.parse_errors++;
-    }
-    return;
+    return APP_MOTION_LINK_LOSS;
   }
 
-  g_host_control.seq = frame.seq;
-  g_host_control.vx_mmps = frame.vx_mmps;
-  g_host_control.vy_mmps = frame.vy_mmps;
-  g_host_control.wz_mradps = frame.wz_mradps;
-  g_host_control.takeover_enable = frame.takeover_enable;
-  g_host_control.valid = 1U;
-  g_host_control.last_update_tick = HAL_GetTick();
-  g_host_control.rx_frame_count++;
+  return g_motion_class;
+}
 
-  if (frame.release_req != 0U)
+static uint8_t APP_GetActiveMask(AppMotionClass motion_class)
+{
+  switch (motion_class)
   {
-    g_release_request_pending = 1U;
+    case APP_MOTION_FORWARD:
+      return TOF_MASK_FORWARD;
+
+    case APP_MOTION_REVERSE:
+      return TOF_MASK_REVERSE;
+
+    case APP_MOTION_TURN:
+    case APP_MOTION_STRAFE:
+    case APP_MOTION_MIXED:
+    case APP_MOTION_IDLE:
+    case APP_MOTION_LINK_LOSS:
+    default:
+      return TOF_MASK_ALL;
   }
 }
 
-static uint8_t APP_ParseControlFrame(const char *line, AppControlFrame *frame)
+static void APP_ParseControlLine(char *line, uint32_t now)
 {
-  char working[APP_USB_LINE_BUFFER_SIZE];
-  char *payload;
-  char *checksum_text = NULL;
-  char *star;
-  char *token;
-  char *parts[7] = {0};
-  uint32_t part_count = 0U;
-  uint8_t ok = 0U;
-  uint32_t checksum_value;
-  int32_t parsed_value;
+  AppMotionClass motion_class;
+  char *trimmed;
 
-  if ((line == NULL) || (frame == NULL))
+  if (line == NULL)
+  {
+    return;
+  }
+
+  trimmed = APP_Trim(line);
+  if ((trimmed == NULL) || (*trimmed == '\0'))
+  {
+    return;
+  }
+
+  if ((APP_ParseControlJson(trimmed, &motion_class) == 0U) &&
+      (APP_ParseControlText(trimmed, &motion_class) == 0U))
+  {
+    return;
+  }
+
+  g_motion_class = motion_class;
+  g_has_control_input = 1U;
+  g_last_control_tick = now;
+}
+
+static uint8_t APP_ParseControlJson(const char *line, AppMotionClass *motion_class)
+{
+  char mode[16];
+  float vx;
+  float vy;
+  float wz;
+
+  if ((line == NULL) || (motion_class == NULL) || (*line != '{'))
   {
     return 0U;
   }
 
-  (void)memset(frame, 0, sizeof(*frame));
-  (void)memset(working, 0, sizeof(working));
-  (void)strncpy(working, line, sizeof(working) - 1U);
-
-  payload = working;
-  if (*payload == '$')
+  if ((APP_TryReadJsonString(line, "\"mode\"", mode, sizeof(mode)) != 0U) ||
+      (APP_TryReadJsonString(line, "\"motion\"", mode, sizeof(mode)) != 0U))
   {
-    payload++;
+    return APP_ParseControlText(mode, motion_class);
   }
 
-  star = strchr(payload, '*');
-  if (star != NULL)
+  if ((APP_TryReadJsonFloat(line, "\"vx\"", &vx) != 0U) ||
+      (APP_TryReadJsonFloat(line, "\"vy\"", &vy) != 0U) ||
+      (APP_TryReadJsonFloat(line, "\"wz\"", &wz) != 0U) ||
+      (APP_TryReadJsonFloat(line, "\"omega\"", &wz) != 0U))
   {
-    *star = '\0';
-    checksum_text = star + 1;
-    checksum_value = APP_ParseUint32(checksum_text, &ok);
-    if ((ok == 0U) || (checksum_value > 0xFFU) || (APP_CalcChecksum(payload) != (uint8_t)checksum_value))
+    if (APP_TryReadJsonFloat(line, "\"vx\"", &vx) == 0U)
     {
-      if (g_host_control.checksum_errors < 0xFFFFU)
-      {
-        g_host_control.checksum_errors++;
-      }
-      return 0U;
+      vx = 0.0f;
     }
+    if (APP_TryReadJsonFloat(line, "\"vy\"", &vy) == 0U)
+    {
+      vy = 0.0f;
+    }
+    if ((APP_TryReadJsonFloat(line, "\"wz\"", &wz) == 0U) &&
+        (APP_TryReadJsonFloat(line, "\"omega\"", &wz) == 0U))
+    {
+      wz = 0.0f;
+    }
+
+    *motion_class = APP_DeriveMotionClass(vx, vy, wz);
+    return 1U;
   }
 
-  token = strtok(payload, ",");
-  while ((token != NULL) && (part_count < (sizeof(parts) / sizeof(parts[0]))))
-  {
-    parts[part_count++] = token;
-    token = strtok(NULL, ",");
-  }
+  return 0U;
+}
 
-  if ((part_count < 7U) || (strcmp(parts[0], "H7CTL") != 0))
-  {
-    return 0U;
-  }
+static uint8_t APP_ParseControlText(const char *line, AppMotionClass *motion_class)
+{
+  float vx;
+  float vy;
+  float wz;
 
-  frame->seq = APP_ParseUint32(parts[1], &ok);
-  if (ok == 0U)
-  {
-    return 0U;
-  }
-
-  frame->vx_mmps = APP_ParseInt32(parts[2], &ok);
-  if (ok == 0U)
-  {
-    return 0U;
-  }
-
-  frame->vy_mmps = APP_ParseInt32(parts[3], &ok);
-  if (ok == 0U)
+  if ((line == NULL) || (motion_class == NULL))
   {
     return 0U;
   }
 
-  frame->wz_mradps = APP_ParseInt32(parts[4], &ok);
-  if (ok == 0U)
+  if ((APP_Stricmp(line, "FWD") == 0) ||
+      (APP_Stricmp(line, "FORWARD") == 0) ||
+      (APP_Stricmp(line, "MODE:FWD") == 0) ||
+      (APP_Stricmp(line, "MODE:FORWARD") == 0) ||
+      (APP_Stricmp(line, "CMD,FWD") == 0) ||
+      (APP_Stricmp(line, "CMD,FORWARD") == 0))
+  {
+    *motion_class = APP_MOTION_FORWARD;
+    return 1U;
+  }
+
+  if ((APP_Stricmp(line, "REV") == 0) ||
+      (APP_Stricmp(line, "REVERSE") == 0) ||
+      (APP_Stricmp(line, "BACKWARD") == 0) ||
+      (APP_Stricmp(line, "MODE:REV") == 0) ||
+      (APP_Stricmp(line, "MODE:REVERSE") == 0) ||
+      (APP_Stricmp(line, "CMD,REV") == 0) ||
+      (APP_Stricmp(line, "CMD,REVERSE") == 0))
+  {
+    *motion_class = APP_MOTION_REVERSE;
+    return 1U;
+  }
+
+  if ((APP_Stricmp(line, "TURN") == 0) ||
+      (APP_Stricmp(line, "ROTATE") == 0) ||
+      (APP_Stricmp(line, "MODE:TURN") == 0) ||
+      (APP_Stricmp(line, "CMD,TURN") == 0))
+  {
+    *motion_class = APP_MOTION_TURN;
+    return 1U;
+  }
+
+  if ((APP_Stricmp(line, "STRAFE") == 0) ||
+      (APP_Stricmp(line, "SHIFT") == 0) ||
+      (APP_Stricmp(line, "MODE:STRAFE") == 0) ||
+      (APP_Stricmp(line, "CMD,STRAFE") == 0))
+  {
+    *motion_class = APP_MOTION_STRAFE;
+    return 1U;
+  }
+
+  if ((APP_Stricmp(line, "MIXED") == 0) ||
+      (APP_Stricmp(line, "MODE:MIXED") == 0) ||
+      (APP_Stricmp(line, "CMD,MIXED") == 0))
+  {
+    *motion_class = APP_MOTION_MIXED;
+    return 1U;
+  }
+
+  if ((APP_Stricmp(line, "IDLE") == 0) ||
+      (APP_Stricmp(line, "STOP") == 0) ||
+      (APP_Stricmp(line, "STATIC") == 0) ||
+      (APP_Stricmp(line, "MODE:IDLE") == 0) ||
+      (APP_Stricmp(line, "CMD,IDLE") == 0))
+  {
+    *motion_class = APP_MOTION_IDLE;
+    return 1U;
+  }
+
+  if (APP_ParseFloatTriplet(line, &vx, &vy, &wz) != 0U)
+  {
+    *motion_class = APP_DeriveMotionClass(vx, vy, wz);
+    return 1U;
+  }
+
+  return 0U;
+}
+
+static AppMotionClass APP_DeriveMotionClass(float vx, float vy, float wz)
+{
+  uint8_t has_vx = ((vx > CONTROL_EPSILON) || (vx < -CONTROL_EPSILON)) ? 1U : 0U;
+  uint8_t has_vy = ((vy > CONTROL_EPSILON) || (vy < -CONTROL_EPSILON)) ? 1U : 0U;
+  uint8_t has_wz = ((wz > CONTROL_EPSILON) || (wz < -CONTROL_EPSILON)) ? 1U : 0U;
+
+  if ((has_vx == 0U) && (has_vy == 0U) && (has_wz == 0U))
+  {
+    return APP_MOTION_IDLE;
+  }
+
+  if ((has_vx != 0U) && (has_vy == 0U) && (has_wz == 0U))
+  {
+    return (vx > 0.0f) ? APP_MOTION_FORWARD : APP_MOTION_REVERSE;
+  }
+
+  if ((has_vx == 0U) && (has_vy != 0U) && (has_wz == 0U))
+  {
+    return APP_MOTION_STRAFE;
+  }
+
+  if ((has_vx == 0U) && (has_vy == 0U) && (has_wz != 0U))
+  {
+    return APP_MOTION_TURN;
+  }
+
+  return APP_MOTION_MIXED;
+}
+
+static uint8_t APP_TryReadJsonString(const char *json, const char *key, char *out, uint32_t out_size)
+{
+  const char *start;
+  const char *end;
+  uint32_t length;
+
+  if ((json == NULL) || (key == NULL) || (out == NULL) || (out_size < 2U))
   {
     return 0U;
   }
 
-  parsed_value = APP_ParseInt32(parts[5], &ok);
-  if (ok == 0U)
+  start = strstr(json, key);
+  if (start == NULL)
   {
     return 0U;
   }
-  frame->release_req = (parsed_value != 0) ? 1U : 0U;
 
-  parsed_value = APP_ParseInt32(parts[6], &ok);
-  if (ok == 0U)
+  start = strchr(start, ':');
+  if (start == NULL)
   {
     return 0U;
   }
-  frame->takeover_enable = (parsed_value != 0) ? 1U : 0U;
 
+  start = APP_SkipWhitespace(start + 1);
+  if (*start != '"')
+  {
+    return 0U;
+  }
+
+  start++;
+  end = strchr(start, '"');
+  if (end == NULL)
+  {
+    return 0U;
+  }
+
+  length = (uint32_t)(end - start);
+  if (length >= out_size)
+  {
+    length = out_size - 1U;
+  }
+
+  (void)memcpy(out, start, length);
+  out[length] = '\0';
   return 1U;
 }
 
-static int32_t APP_ParseInt32(const char *text, uint8_t *ok)
+static uint8_t APP_TryReadJsonFloat(const char *json, const char *key, float *value)
 {
-  char *end_ptr = NULL;
-  long value;
+  const char *start;
+  char *end;
 
-  if (ok != NULL)
-  {
-    *ok = 0U;
-  }
-
-  if (text == NULL)
-  {
-    return 0;
-  }
-
-  value = strtol(text, &end_ptr, 10);
-  if ((end_ptr == text) || ((end_ptr != NULL) && (*end_ptr != '\0')))
-  {
-    return 0;
-  }
-
-  if (ok != NULL)
-  {
-    *ok = 1U;
-  }
-
-  return (int32_t)value;
-}
-
-static uint32_t APP_ParseUint32(const char *text, uint8_t *ok)
-{
-  char *end_ptr = NULL;
-  unsigned long value;
-
-  if (ok != NULL)
-  {
-    *ok = 0U;
-  }
-
-  if (text == NULL)
+  if ((json == NULL) || (key == NULL) || (value == NULL))
   {
     return 0U;
   }
 
-  value = strtoul(text, &end_ptr, 16);
-  if ((strchr(text, 'x') == NULL) && (strchr(text, 'X') == NULL) && (strpbrk(text, "ABCDEFabcdef") == NULL))
-  {
-    value = strtoul(text, &end_ptr, 10);
-  }
-
-  if ((end_ptr == text) || ((end_ptr != NULL) && (*end_ptr != '\0')))
+  start = strstr(json, key);
+  if (start == NULL)
   {
     return 0U;
   }
 
-  if (ok != NULL)
+  start = strchr(start, ':');
+  if (start == NULL)
   {
-    *ok = 1U;
+    return 0U;
   }
 
-  return (uint32_t)value;
+  start = APP_SkipWhitespace(start + 1);
+  *value = strtof(start, &end);
+  return (end != start) ? 1U : 0U;
 }
 
-static uint32_t APP_Abs32(int32_t value)
+static uint8_t APP_ParseFloatTriplet(const char *line, float *vx, float *vy, float *wz)
 {
-  return (value < 0) ? (uint32_t)(-value) : (uint32_t)value;
+  if ((line == NULL) || (vx == NULL) || (vy == NULL) || (wz == NULL))
+  {
+    return 0U;
+  }
+
+  if ((sscanf(line, "%f,%f,%f", vx, vy, wz) == 3) ||
+      (sscanf(line, "%f %f %f", vx, vy, wz) == 3))
+  {
+    return 1U;
+  }
+
+  return 0U;
+}
+
+static int32_t APP_Stricmp(const char *left, const char *right)
+{
+  char left_char;
+  char right_char;
+
+  if ((left == NULL) || (right == NULL))
+  {
+    return -1;
+  }
+
+  while ((*left != '\0') && (*right != '\0'))
+  {
+    left_char = *left;
+    right_char = *right;
+
+    if ((left_char >= 'a') && (left_char <= 'z'))
+    {
+      left_char = (char)(left_char - ('a' - 'A'));
+    }
+    if ((right_char >= 'a') && (right_char <= 'z'))
+    {
+      right_char = (char)(right_char - ('a' - 'A'));
+    }
+
+    if (left_char != right_char)
+    {
+      return (int32_t)((unsigned char)left_char - (unsigned char)right_char);
+    }
+
+    left++;
+    right++;
+  }
+
+  return (int32_t)((unsigned char)(*left) - (unsigned char)(*right));
+}
+
+static char *APP_Trim(char *text)
+{
+  char *end;
+
+  if (text == NULL)
+  {
+    return NULL;
+  }
+
+  while ((*text == ' ') || (*text == '\t'))
+  {
+    text++;
+  }
+
+  end = text + strlen(text);
+  while ((end > text) && ((end[-1] == ' ') || (end[-1] == '\t')))
+  {
+    end--;
+  }
+  *end = '\0';
+  return text;
+}
+
+static const char *APP_SkipWhitespace(const char *text)
+{
+  while ((text != NULL) && ((*text == ' ') || (*text == '\t')))
+  {
+    text++;
+  }
+
+  return text;
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)

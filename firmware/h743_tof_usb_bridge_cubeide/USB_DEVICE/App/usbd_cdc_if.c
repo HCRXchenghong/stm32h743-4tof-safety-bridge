@@ -24,6 +24,7 @@
 
 /* USER CODE BEGIN INCLUDE */
 
+#include "main.h"
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -99,8 +100,6 @@ uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 
 /* USER CODE BEGIN PRIVATE_VARIABLES */
 
-static USB_RxCallback g_usb_rx_callback = NULL;
-
 /* USER CODE END PRIVATE_VARIABLES */
 
 /**
@@ -161,7 +160,6 @@ static int8_t CDC_Init_FS(void)
   /* Set Application Buffers */
   USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, 0);
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
-  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
   return (USBD_OK);
   /* USER CODE END 3 */
 }
@@ -268,10 +266,11 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
-  if ((g_usb_rx_callback != NULL) && (Buf != NULL) && (Len != NULL))
+  if ((Buf != NULL) && (Len != NULL) && (*Len > 0U))
   {
-    g_usb_rx_callback(Buf, *Len);
+    APP_ControlInput(Buf, *Len);
   }
+
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);
   return (USBD_OK);
@@ -390,11 +389,6 @@ void USB_printf(const char *format, ...)
 
 	CDC_Transmit_FS(UserTxBufferFS, (uint16_t)length); // 调用 USB CDC函数发送数据
 		
-}
-
-void USB_RegisterRxCallback(USB_RxCallback callback)
-{
-  g_usb_rx_callback = callback;
 }
 
 /* USER CODE END PRIVATE_FUNCTIONS_IMPLEMENTATION */
