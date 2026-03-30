@@ -1,37 +1,45 @@
 # stm32h743-4tof-safety-bridge
 
-基于 `STM32H743ZITx` 的 4 路 UART TOF 板端采集与急停联调工程。
+基于 `STM32H743ZITx` 的 4 路 UART TOF 安全冗余板工程。
 
 ## 项目目标
 
 - 采集 4 路 `DYP-R01` 激光 TOF 串口数据
-- 板端通过 `USB CDC` 把 4 路距离和状态发给电脑
-- 提供一个本地 HTML 页面查看串口数据
-- 预留底盘 `低电平触发` 急停 IO
-- 后续可继续补 ROS1 串口桥和安全策略
+- 板端根据运动方向决定哪些 TOF 生效
+- 在板端主动判断越界并输出急停
+- 通过 `USB CDC` 与上位机双向通信
+- 提供本地 HTML 联调页面
+- 提供独立于当前工作区的 ROS1 SDK 与完整文档
 
 ## 当前状态
 
-当前版本已经打通：
-- STM32 `USB CDC` 枚举
-- 4 路 UART 接收框架
-- TOF 二进制帧解析
-- HTML Web Serial 联调
-- 低电平急停 IO 基础逻辑
-
-当前版本还没有定死：
-- 防跌落策略阈值
-- 急停锁存与人工复位策略
-- ROS1 节点正式实现
+当前版本已经实现：
+- STM32 `USB CDC` 双向协议
+- 4 路 UART TOF 接收与解析
+- 板端安全策略：
+  - `TOF1=右前`
+  - `TOF2=右后`
+  - `TOF3=左后`
+  - `TOF4=左前`
+  - 安全窗口 `391mm ± 28mm`
+  - 前进只看前侧、后退只看后侧、转向 4 路全启用
+- 板端 `self_estop / ext_estop / estop` 状态机
+- HTML Web Serial 联调页面升级
+- 独立 ROS1 SDK 骨架
+- Markdown 总文档
 
 ## 目录结构
 
 ```text
 H7-4路TOF/
 ├─ README.md
+├─ docs/
+│  └─ H7_TOF_SAFETY_SYSTEM.md
 ├─ 激光DYP-RD-产品规格书(DYP-R01-V1.0)-250412-A0.pdf
 ├─ firmware/
 │  └─ h743_tof_usb_bridge_cubeide/
+├─ sdk/
+│  └─ h7_tof_safety_bridge_ros1/
 ├─ tools/
 │  └─ web_serial_dashboard/
 │     └─ index.html
@@ -132,6 +140,12 @@ CubeIDE 主工程路径：
 2. 用 `Chrome` 或 `Edge` 打开页面
 3. 通过浏览器 `Web Serial` 连接 STM32 的 `USB CDC` 串口
 
+页面现在支持显示：
+- 急停红灯
+- `self_estop / ext_estop`
+- `active_mask / trip_mask / valid_mask / fault_mask`
+- 4 路 TOF 当前是“生效 / 屏蔽 / 触发急停”
+
 最简单的本地启动方式：
 
 ```powershell
@@ -147,10 +161,10 @@ http://localhost:8000/tools/web_serial_dashboard/index.html
 
 ## STM32 输出协议
 
-当前页面默认解析：
+当前固件推荐输出：
 
 ```text
-$H7TOF,seq,tof1,tof2,tof3,tof4,estop,valid_mask,fault_mask*CS
+$H7TOF,seq,tof1,tof2,tof3,tof4,estop,self_estop,ext_estop,active_mask,trip_mask,valid_mask,fault_mask,motion_mode,takeover*CS
 ```
 
 无效距离使用：
@@ -166,4 +180,30 @@ $H7TOF,seq,tof1,tof2,tof3,tof4,estop,valid_mask,fault_mask*CS
 - `C=`：校验错误数
 - `E=`：UART 错误数
 - `L=`：最后收到的字节
+- `H=`：控制帧接收 / 解析错误 / 校验错误
 
+上位机发给 H7 的控制帧为：
+
+```text
+$H7CTL,seq,vx_mmps,vy_mmps,wz_mradps,release_req,takeover_enable*CS
+```
+
+## ROS1 SDK
+
+独立 SDK 路径：
+- `sdk/h7_tof_safety_bridge_ros1`
+
+这个 SDK 不依赖当前仓库的 `src/`，可以直接复制到新的 catkin 工作区里使用。
+
+默认 ROS 接口：
+- 订阅 `/cmd_vel`
+- 订阅 `/h7_tof/takeover_enable`
+- 发布 `/h7_tof/status`
+- 发布 `/h7_tof/estop`
+- 发布 `/h7_tof/raw_line`
+- 服务 `/h7_tof/release_estop`
+
+## 完整文档
+
+完整架构、协议字段、集成步骤、验收清单见：
+- `docs/H7_TOF_SAFETY_SYSTEM.md`

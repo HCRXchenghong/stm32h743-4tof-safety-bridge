@@ -1,0 +1,15 @@
+<launch>
+  <arg name="port" default="/dev/ttyACM0"/>
+  <arg name="baud" default="115200"/>
+  <arg name="send_rate_hz" default="20.0"/>
+  <arg name="cmd_vel_topic" default="/cmd_vel"/>
+  <arg name="takeover_topic" default="/h7_tof/takeover_enable"/>
+
+  <node pkg="h7_tof_safety_bridge" type="h7_tof_bridge_node.py" name="h7_tof_bridge" output="screen">
+    <param name="port" value="$(arg port)"/>
+    <param name="baud" value="$(arg baud)"/>
+    <param name="send_rate_hz" value="$(arg send_rate_hz)"/>
+    <param name="cmd_vel_topic" value="$(arg cmd_vel_topic)"/>
+    <param name="takeover_topic" value="$(arg takeover_topic)"/>
+  </node>
+</launch>

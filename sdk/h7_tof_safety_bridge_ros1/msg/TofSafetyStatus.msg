@@ -1,0 +1,12 @@
+std_msgs/Header header
+uint32 seq
+uint16[4] tof_mm
+bool estop
+bool self_estop
+bool external_estop
+uint8 active_mask
+uint8 trip_mask
+uint8 valid_mask
+uint8 fault_mask
+uint8 motion_mode
+bool takeover_enabled

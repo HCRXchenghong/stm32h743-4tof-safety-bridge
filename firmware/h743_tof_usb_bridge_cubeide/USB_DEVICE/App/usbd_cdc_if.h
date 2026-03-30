@@ -66,6 +66,8 @@
 
 /* USER CODE BEGIN EXPORTED_TYPES */
 
+typedef void (*USB_RxCallback)(const uint8_t *data, uint32_t len);
+
 /* USER CODE END EXPORTED_TYPES */
 
 /**
@@ -111,6 +113,7 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 /* USER CODE BEGIN EXPORTED_FUNCTIONS */
 
 void USB_printf(const char *format, ...);		// USB��ʽ����� ��ʹ�÷������� printf
+void USB_RegisterRxCallback(USB_RxCallback callback);
 
 /* USER CODE END EXPORTED_FUNCTIONS */
 
@@ -131,4 +134,3 @@ void USB_printf(const char *format, ...);		// USB��ʽ����� ���
 #endif
 
 #endif /* __USBD_CDC_IF_H__ */
-
