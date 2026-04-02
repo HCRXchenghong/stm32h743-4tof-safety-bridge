@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>h7_tof_safety_bridge</name>
+  <version>0.1.0</version>
+  <description>Standalone ROS1 bridge SDK for the STM32 H7 TOF safety board.</description>
+
+  <maintainer email="seron@example.com">seron</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>dynamic_reconfigure</build_depend>
+  <build_depend>diagnostic_msgs</build_depend>
+  <build_depend>message_generation</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>rospy</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>std_srvs</build_depend>
+
+  <exec_depend>dynamic_reconfigure</exec_depend>
+  <exec_depend>diagnostic_msgs</exec_depend>
+  <exec_depend>message_runtime</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>python3-serial</exec_depend>
+
+  <export/>
+</package>
