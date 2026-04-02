@@ -4,7 +4,6 @@ project(h7_tof_safety_bridge)
 find_package(catkin REQUIRED COMPONENTS
   dynamic_reconfigure
   diagnostic_msgs
-  geometry_msgs
   message_generation
   rospy
   std_msgs
@@ -28,7 +27,7 @@ generate_messages(
 catkin_python_setup()
 
 catkin_package(
-  CATKIN_DEPENDS diagnostic_msgs dynamic_reconfigure geometry_msgs message_runtime rospy std_msgs std_srvs
+  CATKIN_DEPENDS diagnostic_msgs dynamic_reconfigure message_runtime rospy std_msgs std_srvs
 )
 
 catkin_install_python(PROGRAMS

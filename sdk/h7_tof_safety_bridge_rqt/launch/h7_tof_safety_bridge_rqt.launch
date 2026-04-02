@@ -1,0 +1,18 @@
+<launch>
+  <arg name="status_topic" default="/h7_tof/status"/>
+  <arg name="raw_topic" default="/h7_tof/raw_line"/>
+  <arg name="release_service" default="/h7_tof/release_estop"/>
+  <arg name="reconfigure_target" default="/h7_tof_bridge"/>
+  <arg name="stale_timeout_ms" default="1500"/>
+  <arg name="apply_confirm_timeout_ms" default="3000"/>
+
+  <node pkg="rqt_gui" type="rqt_gui" name="h7_tof_safety_rqt" output="screen"
+        args="--standalone h7_tof_safety_bridge_rqt/H7TofSafetyBridge">
+    <param name="status_topic" value="$(arg status_topic)"/>
+    <param name="raw_topic" value="$(arg raw_topic)"/>
+    <param name="release_service" value="$(arg release_service)"/>
+    <param name="reconfigure_target" value="$(arg reconfigure_target)"/>
+    <param name="stale_timeout_ms" value="$(arg stale_timeout_ms)"/>
+    <param name="apply_confirm_timeout_ms" value="$(arg apply_confirm_timeout_ms)"/>
+  </node>
+</launch>

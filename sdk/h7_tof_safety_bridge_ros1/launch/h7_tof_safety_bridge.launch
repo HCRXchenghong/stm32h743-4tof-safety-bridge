@@ -3,8 +3,6 @@
   <arg name="baud" default="115200"/>
   <arg name="send_rate_hz" default="20.0"/>
   <arg name="prefer_board_persisted_params" default="true"/>
-  <arg name="cmd_vel_topic" default="/cmd_vel"/>
-  <arg name="takeover_topic" default="/h7_tof/takeover_enable"/>
   <arg name="distance_topic" default="/h7_tof/distances_mm"/>
   <arg name="diagnostics_topic" default="/diagnostics"/>
   <arg name="baseline_mm" default="391"/>
@@ -16,8 +14,6 @@
     <param name="baud" value="$(arg baud)"/>
     <param name="send_rate_hz" value="$(arg send_rate_hz)"/>
     <param name="prefer_board_persisted_params" value="$(arg prefer_board_persisted_params)"/>
-    <param name="cmd_vel_topic" value="$(arg cmd_vel_topic)"/>
-    <param name="takeover_topic" value="$(arg takeover_topic)"/>
     <param name="distance_topic" value="$(arg distance_topic)"/>
     <param name="diagnostics_topic" value="$(arg diagnostics_topic)"/>
     <param name="baseline_mm" value="$(arg baseline_mm)"/>

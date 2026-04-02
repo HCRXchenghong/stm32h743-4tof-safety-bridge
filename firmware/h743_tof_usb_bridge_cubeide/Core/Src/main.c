@@ -19,7 +19,6 @@
 #define TOF_INVALID_DISTANCE_MM      65535U
 #define TOF_INTERBYTE_TIMEOUT_MS     10U
 #define TOF_FRAME_TIMEOUT_MS         120U
-#define CONTROL_INPUT_TIMEOUT_MS     200U
 #define CONTROL_LINE_BUFFER_SIZE     128U
 #define TOF_USB_REPORT_PERIOD_MS     30U
 #define APP_LED_TOGGLE_PERIOD_MS     250U
@@ -36,8 +35,6 @@
 #define TOF_MASK_3                   0x04U
 #define TOF_MASK_4                   0x08U
 #define TOF_MASK_ALL                 (TOF_MASK_1 | TOF_MASK_2 | TOF_MASK_3 | TOF_MASK_4)
-#define CONTROL_EPSILON              0.001f
-
 #define ESTOP_OUT_GPIO_Port          GPIOE
 #define ESTOP_OUT_Pin                GPIO_PIN_10
 
@@ -70,27 +67,14 @@ typedef struct
   uint8_t consecutive_failures;
 } TofChannelContext;
 
-typedef enum
-{
-  APP_MOTION_IDLE = 0,
-  APP_MOTION_FORWARD = 1,
-  APP_MOTION_REVERSE = 2,
-  APP_MOTION_TURN = 3,
-  APP_MOTION_STRAFE = 4,
-  APP_MOTION_MIXED = 5,
-  APP_MOTION_LINK_LOSS = 6
-} AppMotionClass;
-
 typedef struct
 {
-  uint8_t motion_class;
   uint8_t active_mask;
   uint8_t valid_mask;
   uint8_t fault_mask;
   uint8_t trip_mask;
   uint8_t self_estop;
   uint8_t external_estop;
-  uint8_t takeover_enabled;
   uint16_t baseline_mm;
   uint16_t tolerance_mm;
   uint16_t threshold_mm;
@@ -99,10 +83,6 @@ typedef struct
 
 typedef struct
 {
-  uint8_t has_motion_class;
-  AppMotionClass motion_class;
-  uint8_t has_takeover_enable;
-  uint8_t takeover_enable;
   uint8_t release_request;
   uint8_t has_release_hold_ms;
   uint32_t release_hold_ms;
@@ -144,12 +124,8 @@ static uint32_t g_last_report_tick = 0U;
 static uint32_t g_last_led_tick = 0U;
 static uint8_t g_estop_state = APP_ESTOP_RELEASED;
 static uint32_t g_release_override_until_tick = 0U;
-static uint32_t g_last_control_tick = 0U;
 static uint32_t g_last_config_change_tick = 0U;
-static uint8_t g_has_control_input = 0U;
-static AppMotionClass g_motion_class = APP_MOTION_LINK_LOSS;
 static AppSafetyState g_safety_state = {0};
-static uint8_t g_takeover_enabled = 0U;
 static uint16_t g_baseline_mm = TOF_SAFE_BASELINE_DEFAULT_MM;
 static uint16_t g_tolerance_mm = TOF_SAFE_TOLERANCE_DEFAULT_MM;
 static char g_control_line[CONTROL_LINE_BUFFER_SIZE];
@@ -182,16 +158,11 @@ static void APP_SetEstop(uint8_t asserted);
 static TofChannelContext *APP_FindChannel(UART_HandleTypeDef *huart);
 static void APP_UART_CommonInit(UART_HandleTypeDef *huart, USART_TypeDef *instance);
 static void APP_EvaluateSafety(uint32_t now, AppSafetyState *state);
-static AppMotionClass APP_GetEffectiveMotionClass(uint32_t now);
-static uint8_t APP_GetActiveMask(AppMotionClass motion_class);
 static void APP_ParseControlLine(char *line, uint32_t now);
 static uint8_t APP_ParseControlH7Ctl(const char *line, AppControlUpdate *update);
 static uint8_t APP_ParseControlJson(const char *line, AppControlUpdate *update);
 static uint8_t APP_ParseControlText(const char *line, AppControlUpdate *update);
-static AppMotionClass APP_DeriveMotionClass(float vx, float vy, float wz);
-static uint8_t APP_TryReadJsonString(const char *json, const char *key, char *out, uint32_t out_size);
 static uint8_t APP_TryReadJsonFloat(const char *json, const char *key, float *value);
-static uint8_t APP_ParseFloatTriplet(const char *line, float *vx, float *vy, float *wz);
 static int32_t APP_Stricmp(const char *left, const char *right);
 static char *APP_Trim(char *text);
 static char *APP_UnframeControlLine(char *line);
@@ -239,10 +210,6 @@ static void APP_Init(void)
   g_last_report_tick = now;
   g_last_led_tick = now;
   g_release_override_until_tick = 0U;
-  g_last_control_tick = now;
-  g_has_control_input = 0U;
-  g_motion_class = APP_MOTION_LINK_LOSS;
-  g_takeover_enabled = 0U;
   g_baseline_mm = TOF_SAFE_BASELINE_DEFAULT_MM;
   g_tolerance_mm = TOF_SAFE_TOLERANCE_DEFAULT_MM;
   g_control_line_length = 0U;
@@ -353,14 +320,12 @@ static void APP_ReportFrame(uint32_t now)
   (void)snprintf(
       frame_line,
       sizeof(frame_line),
-      "%s,TM=%02X,A=%02X,M=%u,SE=%u,EE=%u,TK=%u,RT=%lu,B=%u,T=%u,TH=%u",
+      "%s,TM=%02X,A=%02X,SE=%u,EE=%u,RT=%lu,B=%u,T=%u,TH=%u",
       payload,
       (unsigned int)g_safety_state.trip_mask,
       (unsigned int)g_safety_state.active_mask,
-      (unsigned int)g_safety_state.motion_class,
       (unsigned int)g_safety_state.self_estop,
       (unsigned int)g_safety_state.external_estop,
-      (unsigned int)g_safety_state.takeover_enabled,
       (unsigned long)g_safety_state.release_remaining_ms,
       (unsigned int)g_safety_state.baseline_mm,
       (unsigned int)g_safety_state.tolerance_mm,
@@ -642,12 +607,10 @@ static void APP_EvaluateSafety(uint32_t now, AppSafetyState *state)
     return;
   }
 
-  state->motion_class = (uint8_t)APP_GetEffectiveMotionClass(now);
-  state->active_mask = APP_GetActiveMask((AppMotionClass)state->motion_class);
+  state->active_mask = TOF_MASK_ALL;
   state->valid_mask = 0U;
   state->fault_mask = 0U;
   state->trip_mask = 0U;
-  state->takeover_enabled = g_takeover_enabled;
   state->baseline_mm = g_baseline_mm;
   state->tolerance_mm = g_tolerance_mm;
   state->threshold_mm = APP_GetTripThresholdMm();
@@ -679,22 +642,6 @@ static void APP_EvaluateSafety(uint32_t now, AppSafetyState *state)
 
   state->self_estop = ((state->fault_mask != 0U) && (state->release_remaining_ms == 0U)) ? 1U : 0U;
   state->external_estop = 0U;
-}
-
-static AppMotionClass APP_GetEffectiveMotionClass(uint32_t now)
-{
-  if ((g_has_control_input == 0U) || ((now - g_last_control_tick) > CONTROL_INPUT_TIMEOUT_MS))
-  {
-    return APP_MOTION_LINK_LOSS;
-  }
-
-  return g_motion_class;
-}
-
-static uint8_t APP_GetActiveMask(AppMotionClass motion_class)
-{
-  (void)motion_class;
-  return TOF_MASK_ALL;
 }
 
 static void APP_ParseControlLine(char *line, uint32_t now)
@@ -734,16 +681,6 @@ static void APP_ParseControlLine(char *line, uint32_t now)
   previous_baseline_mm = g_baseline_mm;
   previous_tolerance_mm = g_tolerance_mm;
 
-  if (update.has_motion_class != 0U)
-  {
-    g_motion_class = update.motion_class;
-  }
-
-  if (update.has_takeover_enable != 0U)
-  {
-    g_takeover_enabled = update.takeover_enable;
-  }
-
   if (update.has_baseline_mm != 0U)
   {
     g_baseline_mm = update.baseline_mm;
@@ -764,8 +701,6 @@ static void APP_ParseControlLine(char *line, uint32_t now)
     config_changed = 1U;
   }
 
-  g_has_control_input = 1U;
-  g_last_control_tick = now;
   if (update.release_request != 0U)
   {
     if (release_hold_ms == 0U)
@@ -784,11 +719,7 @@ static void APP_ParseControlLine(char *line, uint32_t now)
 static uint8_t APP_ParseControlH7Ctl(const char *line, AppControlUpdate *update)
 {
   unsigned long seq_value;
-  long vx_mmps;
-  long vy_mmps;
-  long wz_mradps;
   unsigned long release_req;
-  unsigned long takeover_enable;
   unsigned long baseline_mm = 0UL;
   unsigned long tolerance_mm = 0UL;
   unsigned long release_hold_ms = 0UL;
@@ -801,30 +732,22 @@ static uint8_t APP_ParseControlH7Ctl(const char *line, AppControlUpdate *update)
 
   matched = sscanf(
       line,
-      "H7CTL,%lu,%ld,%ld,%ld,%lu,%lu,%lu,%lu,%lu",
+      "H7CTL,%lu,%lu,%lu,%lu,%lu",
       &seq_value,
-      &vx_mmps,
-      &vy_mmps,
-      &wz_mradps,
       &release_req,
-      &takeover_enable,
       &baseline_mm,
       &tolerance_mm,
       &release_hold_ms);
 
-  if (matched < 6)
+  if (matched < 2)
   {
     return 0U;
   }
 
   (void)seq_value;
-  update->has_motion_class = 1U;
-  update->motion_class = APP_DeriveMotionClass((float)vx_mmps, (float)vy_mmps, (float)wz_mradps);
-  update->has_takeover_enable = 1U;
-  update->takeover_enable = (takeover_enable != 0UL) ? 1U : 0U;
   update->release_request = (release_req != 0UL) ? 1U : 0U;
 
-  if (matched >= 7)
+  if (matched >= 3)
   {
     if (baseline_mm > (unsigned long)TOF_CONFIG_MAX_MM)
     {
@@ -834,7 +757,7 @@ static uint8_t APP_ParseControlH7Ctl(const char *line, AppControlUpdate *update)
     update->baseline_mm = (uint16_t)baseline_mm;
   }
 
-  if (matched >= 8)
+  if (matched >= 4)
   {
     if (tolerance_mm > (unsigned long)TOF_CONFIG_MAX_MM)
     {
@@ -844,7 +767,7 @@ static uint8_t APP_ParseControlH7Ctl(const char *line, AppControlUpdate *update)
     update->tolerance_mm = (uint16_t)tolerance_mm;
   }
 
-  if (matched >= 9)
+  if (matched >= 5)
   {
     update->has_release_hold_ms = 1U;
     update->release_hold_ms = APP_NormalizeReleaseHoldMs(release_hold_ms);
@@ -855,40 +778,12 @@ static uint8_t APP_ParseControlH7Ctl(const char *line, AppControlUpdate *update)
 
 static uint8_t APP_ParseControlJson(const char *line, AppControlUpdate *update)
 {
-  char mode[16];
-  float vx = 0.0f;
-  float vy = 0.0f;
-  float wz = 0.0f;
   float number_value;
   uint8_t parsed = 0U;
-  uint8_t has_vx;
-  uint8_t has_vy;
-  uint8_t has_wz;
 
   if ((line == NULL) || (update == NULL) || (*line != '{'))
   {
     return 0U;
-  }
-
-  if ((APP_TryReadJsonString(line, "\"mode\"", mode, sizeof(mode)) != 0U) ||
-      (APP_TryReadJsonString(line, "\"motion\"", mode, sizeof(mode)) != 0U))
-  {
-    parsed = APP_ParseControlText(mode, update);
-  }
-
-  has_vx = APP_TryReadJsonFloat(line, "\"vx\"", &vx);
-  has_vy = APP_TryReadJsonFloat(line, "\"vy\"", &vy);
-  has_wz = APP_TryReadJsonFloat(line, "\"wz\"", &wz);
-  if (has_wz == 0U)
-  {
-    has_wz = APP_TryReadJsonFloat(line, "\"omega\"", &wz);
-  }
-
-  if ((has_vx != 0U) || (has_vy != 0U) || (has_wz != 0U))
-  {
-    update->has_motion_class = 1U;
-    update->motion_class = APP_DeriveMotionClass(vx, vy, wz);
-    parsed = 1U;
   }
 
   if ((APP_TryReadJsonFloat(line, "\"baseline_mm\"", &number_value) != 0U) ||
@@ -930,91 +825,14 @@ static uint8_t APP_ParseControlJson(const char *line, AppControlUpdate *update)
     parsed = 1U;
   }
 
-  if ((APP_TryReadJsonFloat(line, "\"takeover_enable\"", &number_value) != 0U) ||
-      (APP_TryReadJsonFloat(line, "\"takeover\"", &number_value) != 0U))
-  {
-    update->has_takeover_enable = 1U;
-    update->takeover_enable = (number_value > 0.5f) ? 1U : 0U;
-    parsed = 1U;
-  }
-
   return parsed;
 }
 
 static uint8_t APP_ParseControlText(const char *line, AppControlUpdate *update)
 {
-  float vx;
-  float vy;
-  float wz;
-
   if ((line == NULL) || (update == NULL))
   {
     return 0U;
-  }
-
-  if ((APP_Stricmp(line, "FWD") == 0) ||
-      (APP_Stricmp(line, "FORWARD") == 0) ||
-      (APP_Stricmp(line, "MODE:FWD") == 0) ||
-      (APP_Stricmp(line, "MODE:FORWARD") == 0) ||
-      (APP_Stricmp(line, "CMD,FWD") == 0) ||
-      (APP_Stricmp(line, "CMD,FORWARD") == 0))
-  {
-    update->has_motion_class = 1U;
-    update->motion_class = APP_MOTION_FORWARD;
-    return 1U;
-  }
-
-  if ((APP_Stricmp(line, "REV") == 0) ||
-      (APP_Stricmp(line, "REVERSE") == 0) ||
-      (APP_Stricmp(line, "BACKWARD") == 0) ||
-      (APP_Stricmp(line, "MODE:REV") == 0) ||
-      (APP_Stricmp(line, "MODE:REVERSE") == 0) ||
-      (APP_Stricmp(line, "CMD,REV") == 0) ||
-      (APP_Stricmp(line, "CMD,REVERSE") == 0))
-  {
-    update->has_motion_class = 1U;
-    update->motion_class = APP_MOTION_REVERSE;
-    return 1U;
-  }
-
-  if ((APP_Stricmp(line, "TURN") == 0) ||
-      (APP_Stricmp(line, "ROTATE") == 0) ||
-      (APP_Stricmp(line, "MODE:TURN") == 0) ||
-      (APP_Stricmp(line, "CMD,TURN") == 0))
-  {
-    update->has_motion_class = 1U;
-    update->motion_class = APP_MOTION_TURN;
-    return 1U;
-  }
-
-  if ((APP_Stricmp(line, "STRAFE") == 0) ||
-      (APP_Stricmp(line, "SHIFT") == 0) ||
-      (APP_Stricmp(line, "MODE:STRAFE") == 0) ||
-      (APP_Stricmp(line, "CMD,STRAFE") == 0))
-  {
-    update->has_motion_class = 1U;
-    update->motion_class = APP_MOTION_STRAFE;
-    return 1U;
-  }
-
-  if ((APP_Stricmp(line, "MIXED") == 0) ||
-      (APP_Stricmp(line, "MODE:MIXED") == 0) ||
-      (APP_Stricmp(line, "CMD,MIXED") == 0))
-  {
-    update->has_motion_class = 1U;
-    update->motion_class = APP_MOTION_MIXED;
-    return 1U;
-  }
-
-  if ((APP_Stricmp(line, "IDLE") == 0) ||
-      (APP_Stricmp(line, "STOP") == 0) ||
-      (APP_Stricmp(line, "STATIC") == 0) ||
-      (APP_Stricmp(line, "MODE:IDLE") == 0) ||
-      (APP_Stricmp(line, "CMD,IDLE") == 0))
-  {
-    update->has_motion_class = 1U;
-    update->motion_class = APP_MOTION_IDLE;
-    return 1U;
   }
 
   if ((APP_Stricmp(line, "REL") == 0) ||
@@ -1026,90 +844,7 @@ static uint8_t APP_ParseControlText(const char *line, AppControlUpdate *update)
     return 1U;
   }
 
-  if (APP_ParseFloatTriplet(line, &vx, &vy, &wz) != 0U)
-  {
-    update->has_motion_class = 1U;
-    update->motion_class = APP_DeriveMotionClass(vx, vy, wz);
-    return 1U;
-  }
-
   return 0U;
-}
-
-static AppMotionClass APP_DeriveMotionClass(float vx, float vy, float wz)
-{
-  uint8_t has_vx = ((vx > CONTROL_EPSILON) || (vx < -CONTROL_EPSILON)) ? 1U : 0U;
-  uint8_t has_vy = ((vy > CONTROL_EPSILON) || (vy < -CONTROL_EPSILON)) ? 1U : 0U;
-  uint8_t has_wz = ((wz > CONTROL_EPSILON) || (wz < -CONTROL_EPSILON)) ? 1U : 0U;
-
-  if ((has_vx == 0U) && (has_vy == 0U) && (has_wz == 0U))
-  {
-    return APP_MOTION_IDLE;
-  }
-
-  if ((has_vx != 0U) && (has_vy == 0U) && (has_wz == 0U))
-  {
-    return (vx > 0.0f) ? APP_MOTION_FORWARD : APP_MOTION_REVERSE;
-  }
-
-  if ((has_vx == 0U) && (has_vy != 0U) && (has_wz == 0U))
-  {
-    return APP_MOTION_STRAFE;
-  }
-
-  if ((has_vx == 0U) && (has_vy == 0U) && (has_wz != 0U))
-  {
-    return APP_MOTION_TURN;
-  }
-
-  return APP_MOTION_MIXED;
-}
-
-static uint8_t APP_TryReadJsonString(const char *json, const char *key, char *out, uint32_t out_size)
-{
-  const char *start;
-  const char *end;
-  uint32_t length;
-
-  if ((json == NULL) || (key == NULL) || (out == NULL) || (out_size < 2U))
-  {
-    return 0U;
-  }
-
-  start = strstr(json, key);
-  if (start == NULL)
-  {
-    return 0U;
-  }
-
-  start = strchr(start, ':');
-  if (start == NULL)
-  {
-    return 0U;
-  }
-
-  start = APP_SkipWhitespace(start + 1);
-  if (*start != '"')
-  {
-    return 0U;
-  }
-
-  start++;
-  end = strchr(start, '"');
-  if (end == NULL)
-  {
-    return 0U;
-  }
-
-  length = (uint32_t)(end - start);
-  if (length >= out_size)
-  {
-    length = out_size - 1U;
-  }
-
-  (void)memcpy(out, start, length);
-  out[length] = '\0';
-  return 1U;
 }
 
 static uint8_t APP_TryReadJsonFloat(const char *json, const char *key, float *value)
@@ -1137,22 +872,6 @@ static uint8_t APP_TryReadJsonFloat(const char *json, const char *key, float *va
   start = APP_SkipWhitespace(start + 1);
   *value = strtof(start, &end);
   return (end != start) ? 1U : 0U;
-}
-
-static uint8_t APP_ParseFloatTriplet(const char *line, float *vx, float *vy, float *wz)
-{
-  if ((line == NULL) || (vx == NULL) || (vy == NULL) || (wz == NULL))
-  {
-    return 0U;
-  }
-
-  if ((sscanf(line, "%f,%f,%f", vx, vy, wz) == 3) ||
-      (sscanf(line, "%f %f %f", vx, vy, wz) == 3))
-  {
-    return 1U;
-  }
-
-  return 0U;
 }
 
 static int32_t APP_Stricmp(const char *left, const char *right)

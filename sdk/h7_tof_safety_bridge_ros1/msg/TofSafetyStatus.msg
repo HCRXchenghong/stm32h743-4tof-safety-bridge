@@ -9,8 +9,7 @@ uint8 trip_mask
 uint8 valid_mask
 uint8 fault_mask
 uint8 missing_data_mask
-uint8 motion_mode
-bool takeover_enabled
+bool has_board_params
 uint16 baseline_mm
 uint16 tolerance_mm
 uint16 threshold_mm

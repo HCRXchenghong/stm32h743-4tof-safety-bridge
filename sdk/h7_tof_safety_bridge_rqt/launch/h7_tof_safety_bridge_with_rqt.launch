@@ -1,0 +1,38 @@
+<launch>
+  <arg name="port" default="/dev/ttyACM0"/>
+  <arg name="baud" default="115200"/>
+  <arg name="send_rate_hz" default="20.0"/>
+  <arg name="prefer_board_persisted_params" default="true"/>
+  <arg name="distance_topic" default="/h7_tof/distances_mm"/>
+  <arg name="diagnostics_topic" default="/diagnostics"/>
+  <arg name="baseline_mm" default="391"/>
+  <arg name="tolerance_mm" default="28"/>
+  <arg name="release_hold_ms" default="3000"/>
+  <arg name="status_topic" default="/h7_tof/status"/>
+  <arg name="raw_topic" default="/h7_tof/raw_line"/>
+  <arg name="release_service" default="/h7_tof/release_estop"/>
+  <arg name="reconfigure_target" default="/h7_tof_bridge"/>
+  <arg name="stale_timeout_ms" default="1500"/>
+  <arg name="apply_confirm_timeout_ms" default="3000"/>
+
+  <include file="$(find h7_tof_safety_bridge)/launch/h7_tof_safety_bridge.launch">
+    <arg name="port" value="$(arg port)"/>
+    <arg name="baud" value="$(arg baud)"/>
+    <arg name="send_rate_hz" value="$(arg send_rate_hz)"/>
+    <arg name="prefer_board_persisted_params" value="$(arg prefer_board_persisted_params)"/>
+    <arg name="distance_topic" value="$(arg distance_topic)"/>
+    <arg name="diagnostics_topic" value="$(arg diagnostics_topic)"/>
+    <arg name="baseline_mm" value="$(arg baseline_mm)"/>
+    <arg name="tolerance_mm" value="$(arg tolerance_mm)"/>
+    <arg name="release_hold_ms" value="$(arg release_hold_ms)"/>
+  </include>
+
+  <include file="$(find h7_tof_safety_bridge_rqt)/launch/h7_tof_safety_bridge_rqt.launch">
+    <arg name="status_topic" value="$(arg status_topic)"/>
+    <arg name="raw_topic" value="$(arg raw_topic)"/>
+    <arg name="release_service" value="$(arg release_service)"/>
+    <arg name="reconfigure_target" value="$(arg reconfigure_target)"/>
+    <arg name="stale_timeout_ms" value="$(arg stale_timeout_ms)"/>
+    <arg name="apply_confirm_timeout_ms" value="$(arg apply_confirm_timeout_ms)"/>
+  </include>
+</launch>

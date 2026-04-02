@@ -13,28 +13,14 @@ TOF_CHANNEL_LABELS = (
     "left_front",
 )
 
-MOTION_LABELS = {
-    0: "idle",
-    1: "forward",
-    2: "reverse",
-    3: "turn",
-    4: "strafe",
-    5: "mixed",
-    6: "link_loss",
-}
-
 
 @dataclass
 class ControlCommand:
     seq: int
-    vx_mmps: int
-    vy_mmps: int
-    wz_mradps: int
     release_req: bool
-    release_hold_ms: int
-    takeover_enable: bool
     baseline_mm: int
     tolerance_mm: int
+    release_hold_ms: int
 
 
 @dataclass
@@ -48,8 +34,6 @@ class TofStatusFrame:
     trip_mask: int
     valid_mask: int
     fault_mask: int
-    motion_mode: int
-    takeover_enabled: bool
     baseline_mm: int
     tolerance_mm: int
     threshold_mm: int
@@ -76,10 +60,10 @@ def parse_int(raw: str) -> int:
 def build_control_frame(command: ControlCommand) -> str:
     baseline_mm = max(0, int(command.baseline_mm))
     tolerance_mm = max(0, int(command.tolerance_mm))
+    release_hold_ms = max(0, int(command.release_hold_ms))
     payload = (
-        f"H7CTL,{int(command.seq)},{int(command.vx_mmps)},{int(command.vy_mmps)},"
-        f"{int(command.wz_mradps)},{1 if command.release_req else 0},"
-        f"{1 if command.takeover_enable else 0},{baseline_mm},{tolerance_mm},{max(0, int(command.release_hold_ms))}"
+        f"H7CTL,{int(command.seq)},{1 if command.release_req else 0},"
+        f"{baseline_mm},{tolerance_mm},{release_hold_ms}"
     )
     checksum = xor_checksum(payload)
     return f"${payload}*{checksum:02X}\r\n"
@@ -114,40 +98,22 @@ def parse_status_line(line: str) -> TofStatusFrame:
         parse_int(parts[5]),
     ]
     estop = bool(parse_int(parts[6]))
-
-    if _looks_like_legacy_status(parts):
-        self_estop = bool(parse_int(parts[7]))
-        external_estop = bool(parse_int(parts[8]))
-        active_mask = parse_int(parts[9])
-        trip_mask = parse_int(parts[10])
-        valid_mask = parse_int(parts[11])
-        fault_mask = parse_int(parts[12])
-        motion_mode = parse_int(parts[13])
-        takeover_enabled = bool(parse_int(parts[14]))
-        baseline_mm = DEFAULT_BASELINE_MM
-        tolerance_mm = DEFAULT_TOLERANCE_MM
-        threshold_mm = DEFAULT_THRESHOLD_MM
-        release_remaining_ms = 0
-        has_board_params = False
-    else:
-        valid_mask = parse_int(parts[7])
-        fault_mask = parse_int(parts[8])
-        fields = _parse_key_value_fields(parts[9:])
-        self_estop = bool(_parse_field_int(fields, "SE", int(estop)))
-        external_estop = bool(_parse_field_int(fields, "EE", 0))
-        active_mask = _parse_field_int(fields, "A", 0x0F)
-        trip_mask = _parse_field_int(fields, "TM", fault_mask)
-        motion_mode = _parse_field_int(fields, "M", 6)
-        takeover_enabled = bool(_parse_field_int(fields, "TK", 0))
-        has_board_params = "B" in fields and "T" in fields
-        baseline_mm = _parse_field_int(fields, "B", DEFAULT_BASELINE_MM)
-        tolerance_mm = _parse_field_int(fields, "T", DEFAULT_TOLERANCE_MM)
-        threshold_mm = _parse_field_int(
-            fields,
-            "TH",
-            min(INVALID_DISTANCE_MM - 1, baseline_mm + tolerance_mm),
-        )
-        release_remaining_ms = _parse_field_int(fields, "RT", 0)
+    valid_mask = parse_int(parts[7])
+    fault_mask = parse_int(parts[8])
+    fields = _parse_key_value_fields(parts[9:])
+    self_estop = bool(_parse_field_int(fields, "SE", int(estop)))
+    external_estop = bool(_parse_field_int(fields, "EE", 0))
+    active_mask = _parse_field_int(fields, "A", 0x0F)
+    trip_mask = _parse_field_int(fields, "TM", fault_mask)
+    has_board_params = "B" in fields and "T" in fields
+    baseline_mm = _parse_field_int(fields, "B", DEFAULT_BASELINE_MM)
+    tolerance_mm = _parse_field_int(fields, "T", DEFAULT_TOLERANCE_MM)
+    threshold_mm = _parse_field_int(
+        fields,
+        "TH",
+        min(INVALID_DISTANCE_MM - 1, baseline_mm + tolerance_mm),
+    )
+    release_remaining_ms = _parse_field_int(fields, "RT", 0)
 
     return TofStatusFrame(
         seq=seq,
@@ -159,18 +125,12 @@ def parse_status_line(line: str) -> TofStatusFrame:
         trip_mask=trip_mask,
         valid_mask=valid_mask,
         fault_mask=fault_mask,
-        motion_mode=motion_mode,
-        takeover_enabled=takeover_enabled,
         baseline_mm=baseline_mm,
         tolerance_mm=tolerance_mm,
         threshold_mm=threshold_mm,
         release_remaining_ms=release_remaining_ms,
         has_board_params=has_board_params,
     )
-
-
-def motion_label(motion_mode: int) -> str:
-    return MOTION_LABELS.get(motion_mode, f"unknown({motion_mode})")
 
 
 def active_missing_mask(active_mask: int, valid_mask: int) -> int:
@@ -180,12 +140,6 @@ def active_missing_mask(active_mask: int, valid_mask: int) -> int:
 def mask_to_tof_labels(mask: int) -> List[str]:
     normalized_mask = int(mask) & 0x0F
     return [TOF_CHANNEL_LABELS[index] for index in range(len(TOF_CHANNEL_LABELS)) if (normalized_mask & (1 << index)) != 0]
-
-
-def _looks_like_legacy_status(parts: List[str]) -> bool:
-    if len(parts) < 15:
-        return False
-    return all("=" not in item for item in parts[7:15])
 
 
 def _parse_key_value_fields(parts: List[str]) -> Dict[str, str]:

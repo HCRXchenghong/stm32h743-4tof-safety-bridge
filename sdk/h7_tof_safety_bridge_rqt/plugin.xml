@@ -1,0 +1,11 @@
+<library path="src">
+  <class name="h7_tof_safety_bridge_rqt/H7TofSafetyBridge"
+         type="h7_tof_safety_bridge_rqt.plugin.H7TofSafetyBridgePlugin"
+         base_class_type="rqt_gui_py::Plugin">
+    <description>Pure-TOF ROS1 rqt panel for the STM32 H7 safety bridge.</description>
+    <qtgui>
+      <label>H7 TOF Safety</label>
+      <statustip>Monitor TOF status, apply parameters, and trigger timed estop release.</statustip>
+    </qtgui>
+  </class>
+</library>

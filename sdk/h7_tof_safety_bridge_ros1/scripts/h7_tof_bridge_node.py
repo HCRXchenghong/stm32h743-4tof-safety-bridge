@@ -5,7 +5,6 @@ from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 import rospy
 import serial
 from dynamic_reconfigure.server import Server
-from geometry_msgs.msg import Twist
 from std_msgs.msg import Bool, String, UInt16MultiArray
 from std_srvs.srv import Trigger, TriggerResponse
 
@@ -29,24 +28,20 @@ class H7TofBridgeNode:
         self.baud_rate = int(rospy.get_param("~baud", 115200))
         self.send_rate_hz = float(rospy.get_param("~send_rate_hz", 20.0))
         self.prefer_board_persisted_params = bool(rospy.get_param("~prefer_board_persisted_params", True))
-        self.cmd_vel_topic = rospy.get_param("~cmd_vel_topic", "/cmd_vel")
-        self.takeover_topic = rospy.get_param("~takeover_topic", "/h7_tof/takeover_enable")
         self.status_topic = rospy.get_param("~status_topic", "/h7_tof/status")
         self.estop_topic = rospy.get_param("~estop_topic", "/h7_tof/estop")
         self.raw_topic = rospy.get_param("~raw_topic", "/h7_tof/raw_line")
         self.distance_topic = rospy.get_param("~distance_topic", "/h7_tof/distances_mm")
         self.diagnostics_topic = rospy.get_param("~diagnostics_topic", "/diagnostics")
-        self.release_hold_ms = int(rospy.get_param("~release_hold_ms", 3000))
 
         self.seq = 0
-        self.vx_mmps = 0
-        self.vy_mmps = 0
-        self.wz_mradps = 0
-        self.takeover_enabled = False
         self.release_requested = False
+        self.release_hold_ms = int(rospy.get_param("~release_hold_ms", 3000))
         self.baseline_mm = int(rospy.get_param("~baseline_mm", DEFAULT_BASELINE_MM))
         self.tolerance_mm = int(rospy.get_param("~tolerance_mm", DEFAULT_TOLERANCE_MM))
-        self.params_bootstrapped = not self.prefer_board_persisted_params
+        self.board_params_bootstrapped = not self.prefer_board_persisted_params
+        self.local_params_dirty = False
+        self.reconfigure_initialized = False
         self.lock = threading.Lock()
         self.running = True
 
@@ -56,11 +51,8 @@ class H7TofBridgeNode:
         self.distance_pub = rospy.Publisher(self.distance_topic, UInt16MultiArray, queue_size=20)
         self.diagnostics_pub = rospy.Publisher(self.diagnostics_topic, DiagnosticArray, queue_size=20)
 
-        rospy.Subscriber(self.cmd_vel_topic, Twist, self.on_cmd_vel, queue_size=10)
-        rospy.Subscriber(self.takeover_topic, Bool, self.on_takeover, queue_size=10)
-        rospy.Service("/h7_tof/release_estop", Trigger, self.handle_release_estop)
-
         self.dynamic_reconfigure_server = Server(SafetyBridgeConfig, self.on_reconfigure)
+        rospy.Service("/h7_tof/release_estop", Trigger, self.handle_release_estop)
 
         self.serial_port = serial.Serial(
             port=self.port_name,
@@ -74,23 +66,18 @@ class H7TofBridgeNode:
         self.send_timer = rospy.Timer(rospy.Duration.from_sec(1.0 / self.send_rate_hz), self.send_control_frame)
         rospy.on_shutdown(self.shutdown)
 
-    def on_cmd_vel(self, msg: Twist) -> None:
-        with self.lock:
-            self.vx_mmps = int(round(msg.linear.x * 1000.0))
-            self.vy_mmps = int(round(msg.linear.y * 1000.0))
-            self.wz_mradps = int(round(msg.angular.z * 1000.0))
-
-    def on_takeover(self, msg: Bool) -> None:
-        with self.lock:
-            self.takeover_enabled = bool(msg.data)
-
     def on_reconfigure(self, config: SafetyBridgeConfig, _level: int) -> SafetyBridgeConfig:
         with self.lock:
             self.baseline_mm = max(0, int(config.baseline_mm))
             self.tolerance_mm = max(0, int(config.tolerance_mm))
-            self.params_bootstrapped = True
+            self.release_hold_ms = max(1, int(config.release_hold_ms))
             config.baseline_mm = self.baseline_mm
             config.tolerance_mm = self.tolerance_mm
+            config.release_hold_ms = self.release_hold_ms
+            if self.reconfigure_initialized:
+                self.local_params_dirty = True
+            else:
+                self.reconfigure_initialized = True
         return config
 
     def handle_release_estop(self, _req: Trigger) -> TriggerResponse:
@@ -101,21 +88,15 @@ class H7TofBridgeNode:
 
     def send_control_frame(self, _event) -> None:
         with self.lock:
-            if not self.params_bootstrapped:
-                return
             release_req = self.release_requested
             if release_req:
                 self.release_requested = False
             command = ControlCommand(
                 seq=self.seq,
-                vx_mmps=self.vx_mmps,
-                vy_mmps=self.vy_mmps,
-                wz_mradps=self.wz_mradps,
                 release_req=release_req,
-                release_hold_ms=self.release_hold_ms,
-                takeover_enable=self.takeover_enabled,
                 baseline_mm=self.baseline_mm,
                 tolerance_mm=self.tolerance_mm,
+                release_hold_ms=self.release_hold_ms,
             )
             self.seq += 1
 
@@ -170,8 +151,7 @@ class H7TofBridgeNode:
             status_msg.valid_mask = frame.valid_mask
             status_msg.fault_mask = frame.fault_mask
             status_msg.missing_data_mask = active_missing_mask(frame.active_mask, frame.valid_mask)
-            status_msg.motion_mode = frame.motion_mode
-            status_msg.takeover_enabled = frame.takeover_enabled
+            status_msg.has_board_params = frame.has_board_params
             status_msg.baseline_mm = frame.baseline_mm
             status_msg.tolerance_mm = frame.tolerance_mm
             status_msg.threshold_mm = frame.threshold_mm
@@ -210,18 +190,21 @@ class H7TofBridgeNode:
 
     def bootstrap_params_from_board(self, frame) -> None:
         with self.lock:
-            if self.params_bootstrapped:
+            if self.board_params_bootstrapped:
                 return
             if not frame.has_board_params:
                 rospy.logwarn_throttle(
                     5.0,
-                    "H7 status frames do not include B/T/TH; board may still be running older firmware, so ROS will keep waiting for real board parameter readback",
+                    "H7 status frames do not include B/T/TH; ROS will keep using local params and mark the board as unconfirmed",
                 )
+                return
+            if self.local_params_dirty:
+                self.board_params_bootstrapped = True
                 return
 
             self.baseline_mm = int(frame.baseline_mm)
             self.tolerance_mm = int(frame.tolerance_mm)
-            self.params_bootstrapped = True
+            self.board_params_bootstrapped = True
             baseline_mm = self.baseline_mm
             tolerance_mm = self.tolerance_mm
 
@@ -230,6 +213,7 @@ class H7TofBridgeNode:
                 {
                     "baseline_mm": baseline_mm,
                     "tolerance_mm": tolerance_mm,
+                    "release_hold_ms": self.release_hold_ms,
                 }
             )
         except Exception as exc:
@@ -277,6 +261,7 @@ class H7TofBridgeNode:
         diagnostic_status.values = [
             KeyValue(key="estop", value=str(bool(frame.estop)).lower()),
             KeyValue(key="self_estop", value=str(bool(frame.self_estop)).lower()),
+            KeyValue(key="has_board_params", value=str(bool(frame.has_board_params)).lower()),
             KeyValue(key="missing_data_mask", value=f"0x{missing_mask:02X}"),
             KeyValue(key="missing_data_labels", value=", ".join(missing_labels) if missing_labels else "none"),
             KeyValue(key="active_mask", value=f"0x{frame.active_mask:02X}"),

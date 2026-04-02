@@ -1,81 +1,57 @@
-# h7_tof_safety_bridge ROS1 SDK
+# h7_tof_safety_bridge
 
-ROS1 bridge for the STM32 H7 4-TOF safety board.
+ROS1 SDK for the pure-TOF STM32 H7 safety bridge.
 
-## What Changed
+## Features
 
-- All 4 TOF channels stay active all the time.
-- The H7 now trips `self_estop` when a valid TOF distance is greater than `baseline_mm + tolerance_mm`.
-- Missing, out-of-range, or failed TOF data on any active channel also trips `self_estop`.
-- Distances lower than the baseline do not trigger `self_estop`.
-- ROS can queue a timed manual release; while `release_remaining_ms > 0`, the H7 keeps `self_estop=0` even if TOF faults still exist.
-- When the manual-release timer expires, the H7 asserts `self_estop` again if any TOF fault is still present.
-- `baseline_mm` and `tolerance_mm` can be changed at runtime from `rqt_reconfigure`.
+- Publishes 4-channel TOF status, estop state, masks, threshold, and manual-release remaining time
+- Applies `baseline_mm` / `tolerance_mm` / `release_hold_ms` through `dynamic_reconfigure`
+- Exposes `/h7_tof/release_estop` for timed manual release
+- Publishes `/diagnostics` warnings when TOF channels are invalid, out of range, or threshold-tripped
+- Keeps working even if the board does not report `B/T/TH`, but marks that state as unconfirmed
 
 ## ROS Interfaces
 
-- Subscribed: `/cmd_vel`
-- Subscribed: `/h7_tof/takeover_enable`
-- Published: `/h7_tof/status`
-- Published: `/h7_tof/estop`
-- Published: `/h7_tof/raw_line`
-- Published: `/h7_tof/distances_mm`
-- Published: `/diagnostics`
-- Service: `/h7_tof/release_estop` (queues an H7 timed manual-release command)
+Published:
 
-`/h7_tof/status` now also includes:
+- `/h7_tof/status` (`h7_tof_safety_bridge/TofSafetyStatus`)
+- `/h7_tof/estop` (`std_msgs/Bool`)
+- `/h7_tof/raw_line` (`std_msgs/String`)
+- `/h7_tof/distances_mm` (`std_msgs/UInt16MultiArray`)
+- `/diagnostics` (`diagnostic_msgs/DiagnosticArray`)
 
-- `trip_mask`
-- `missing_data_mask`
-- `missing_data_labels`
-- `baseline_mm`
-- `tolerance_mm`
-- `threshold_mm`
-- `release_remaining_ms`
+Service:
 
-The SDK derives missing-data errors with:
-
-```text
-missing_data_mask = active_mask & (~valid_mask)
-```
-
-Channel labels are:
-
-- `TOF1 = right_front`
-- `TOF2 = right_rear`
-- `TOF3 = left_rear`
-- `TOF4 = left_front`
-
-When a TOF channel is out of range, missing, or failed, the node still uploads the status to ROS through `/h7_tof/status`, `/h7_tof/distances_mm`, and `/diagnostics`.
-The H7 asserts `self_estop` in that situation unless a timed manual release is currently active; `/diagnostics` also reports the remaining manual-release time.
+- `/h7_tof/release_estop` (`std_srvs/Trigger`)
 
 ## Dynamic Reconfigure
-
-After launching the node, open:
-
-```bash
-rosrun rqt_reconfigure rqt_reconfigure
-```
-
-Then adjust:
 
 - `baseline_mm`
 - `tolerance_mm`
 - `release_hold_ms`
 
-The bridge sends the updated values to the H7 in the periodic `H7CTL` frame.
-
 ## Launch
 
+Main bridge launch:
+
 ```bash
-roslaunch h7_tof_safety_bridge h7_tof_safety_bridge.launch port:=/dev/ttyACM0
+roslaunch h7_tof_safety_bridge h7_tof_safety_bridge.launch
 ```
 
-Optional launch args:
+Useful args:
 
+- `port`
+- `baud`
+- `send_rate_hz`
+- `prefer_board_persisted_params`
 - `distance_topic`
 - `diagnostics_topic`
 - `baseline_mm`
 - `tolerance_mm`
-- `cmd_vel_topic`
-- `takeover_topic`
+- `release_hold_ms`
+
+## Notes
+
+- Invalid or out-of-range TOF readings are published as `65535`.
+- `has_board_params=false` means the board did not report `B/T/TH`; ROS can still send parameters, but cannot confirm board acceptance from status frames alone.
+- When `release_remaining_ms > 0`, the board temporarily suppresses `self_estop`. If the fault remains after the timer expires, estop asserts again.

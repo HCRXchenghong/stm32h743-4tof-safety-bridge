@@ -20,7 +20,6 @@ namespace H7TofSerialConsole
         [DataMember] public int BaselineMm = 391;
         [DataMember] public int ToleranceMm = 28;
         [DataMember] public int ReleaseHoldMs = 3000;
-        [DataMember] public string LastRawCommand = string.Empty;
         [DataMember] public bool AutoReconnect = false;
     }
 
@@ -40,7 +39,6 @@ namespace H7TofSerialConsole
         public int FaultMask;
         public int TripMask;
         public int ActiveMask;
-        public int MotionClass = 6;
         public int SelfEstop;
         public int ExternalEstop;
         public int BaselineMm = 391;
@@ -84,15 +82,13 @@ namespace H7TofSerialConsole
         private NumericUpDown _toleranceInput;
         private NumericUpDown _releaseHoldInput;
         private Button _applyParamsButton;
+        private Button _releaseButton;
         private Label _applyStatusLabel;
         private Label _estopBannerLabel;
         private Label _estopDetailLabel;
-        private TextBox _rawCommandBox;
-        private Button _sendRawButton;
         private RichTextBox _logBox;
         private readonly Dictionary<string, Label> _valueLabels = new Dictionary<string, Label>();
         private readonly Label[] _tofLabels = new Label[4];
-        private readonly Button[] _motionButtons = new Button[6];
 
         public MainForm()
         {
@@ -213,18 +209,17 @@ namespace H7TofSerialConsole
         {
             var panel = CreatePanel();
             panel.Padding = new Padding(14);
-            panel.Height = 160;
+            panel.Height = 124;
 
             var layout = new TableLayoutPanel();
             layout.Dock = DockStyle.Fill;
-            layout.ColumnCount = 8;
-            layout.RowCount = 3;
+            layout.ColumnCount = 7;
+            layout.RowCount = 2;
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140F));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140F));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140F));
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120F));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120F));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             panel.Controls.Add(layout);
@@ -242,50 +237,26 @@ namespace H7TofSerialConsole
             _applyParamsButton = CreateButton("下发参数", OnApplyParameters);
             layout.Controls.Add(_applyParamsButton, 4, 0);
 
-            var releaseButton = CreateButton("恢复急停", OnReleaseEstop);
-            _motionButtons[5] = releaseButton;
-            layout.Controls.Add(releaseButton, 5, 0);
+            _releaseButton = CreateButton("恢复急停", OnReleaseEstop);
+            layout.Controls.Add(_releaseButton, 5, 0);
 
             _applyStatusLabel = new Label();
             _applyStatusLabel.AutoSize = true;
             _applyStatusLabel.Margin = new Padding(8, 12, 4, 4);
             _applyStatusLabel.Text = "未下发";
             layout.Controls.Add(_applyStatusLabel, 6, 0);
-            layout.SetColumnSpan(_applyStatusLabel, 2);
 
             layout.Controls.Add(CreateCaption("人工解除(ms)"), 0, 1);
             _releaseHoldInput = CreateNumericUpDown(1, 600000, DefaultReleaseHoldMs);
             layout.Controls.Add(_releaseHoldInput, 1, 1);
 
-            layout.Controls.Add(CreateCaption("原始指令"), 2, 1);
-            _rawCommandBox = new TextBox();
-            _rawCommandBox.BorderStyle = BorderStyle.FixedSingle;
-            _rawCommandBox.BackColor = Color.FromArgb(10, 18, 28);
-            _rawCommandBox.ForeColor = ForeColor;
-            _rawCommandBox.Text = _settings.LastRawCommand ?? string.Empty;
-            _rawCommandBox.Dock = DockStyle.Fill;
-            layout.Controls.Add(_rawCommandBox, 3, 1);
-            layout.SetColumnSpan(_rawCommandBox, 4);
-
-            _sendRawButton = CreateButton("发送", OnSendRaw);
-            layout.Controls.Add(_sendRawButton, 7, 1);
-
-            string[] motions = { "FWD", "REV", "TURN", "STRAFE", "IDLE" };
-            for (int i = 0; i < motions.Length; i++)
-            {
-                string motion = motions[i];
-                var button = CreateButton(motion, delegate { SendTextCommand(motion); });
-                _motionButtons[i] = button;
-                layout.Controls.Add(button, i, 2);
-            }
-
             var note = new Label();
-            note.Text = "支持原始文本、$H7CTL 帧、快速运动指令和人工解除。人工解除会按设定毫秒数临时放行，时间到且故障仍在时会再次急停。";
+            note.Text = "纯 TOF 模式只保留参数下发和人工解除。参数允许下发，但只有收到板端 B/T/TH 回读后才算确认成功。";
             note.ForeColor = Color.FromArgb(150, 172, 196);
             note.AutoSize = true;
             note.Margin = new Padding(8, 12, 4, 4);
-            layout.Controls.Add(note, 5, 2);
-            layout.SetColumnSpan(note, 3);
+            layout.Controls.Add(note, 2, 1);
+            layout.SetColumnSpan(note, 5);
 
             return panel;
         }
@@ -427,7 +398,7 @@ namespace H7TofSerialConsole
             grid.AutoSize = true;
             grid.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             grid.ColumnCount = 2;
-            grid.RowCount = 12;
+            grid.RowCount = 11;
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44F));
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 56F));
             for (int row = 0; row < grid.RowCount; row++)
@@ -440,14 +411,13 @@ namespace H7TofSerialConsole
             AddValueRow(grid, 1, "总急停", "estop");
             AddValueRow(grid, 2, "板端急停", "self_estop");
             AddValueRow(grid, 3, "外部急停", "external_estop");
-            AddValueRow(grid, 4, "运动分类", "motion_class");
-            AddValueRow(grid, 5, "有效掩码", "valid_mask");
-            AddValueRow(grid, 6, "故障掩码", "fault_mask");
-            AddValueRow(grid, 7, "越界掩码", "trip_mask");
-            AddValueRow(grid, 8, "生效掩码", "active_mask");
-            AddValueRow(grid, 9, "Baseline / Tol", "params");
-            AddValueRow(grid, 10, "Threshold", "threshold");
-            AddValueRow(grid, 11, "解除剩余", "release_remaining");
+            AddValueRow(grid, 4, "有效掩码", "valid_mask");
+            AddValueRow(grid, 5, "故障掩码", "fault_mask");
+            AddValueRow(grid, 6, "越界掩码", "trip_mask");
+            AddValueRow(grid, 7, "生效掩码", "active_mask");
+            AddValueRow(grid, 8, "Baseline / Tol", "params");
+            AddValueRow(grid, 9, "Threshold", "threshold");
+            AddValueRow(grid, 10, "解除剩余", "release_remaining");
 
             return panel;
         }
@@ -608,7 +578,6 @@ namespace H7TofSerialConsole
             SetValue("estop", "0");
             SetValue("self_estop", "0");
             SetValue("external_estop", "0");
-            SetValue("motion_class", "LINK_LOSS");
             SetValue("valid_mask", "0x00");
             SetValue("fault_mask", "0x00");
             SetValue("trip_mask", "0x00");
@@ -805,15 +774,8 @@ namespace H7TofSerialConsole
             bool connected = _serialPort.IsOpen;
             _connectButton.Enabled = !connected;
             _disconnectButton.Enabled = connected;
-            _applyParamsButton.Enabled = connected && _hasBoardParameterSync;
-            _sendRawButton.Enabled = connected;
-            foreach (Button button in _motionButtons)
-            {
-                if (button != null)
-                {
-                    button.Enabled = connected;
-                }
-            }
+            _applyParamsButton.Enabled = connected;
+            _releaseButton.Enabled = connected;
         }
 
         private void UpdateConnectionLabel()
@@ -833,15 +795,16 @@ namespace H7TofSerialConsole
 
         private void OnApplyParameters()
         {
-            if (!_hasBoardParameterSync)
+            if (!_serialPort.IsOpen)
             {
-                AppendLog("请先等待板端参数同步完成，再下发新参数。", Color.Orange);
+                AppendLog("串口未连接，无法下发参数。", Color.Orange);
                 return;
             }
 
             int baseline = Decimal.ToInt32(_baselineInput.Value);
             int tolerance = Decimal.ToInt32(_toleranceInput.Value);
-            string payload = string.Format(CultureInfo.InvariantCulture, "H7CTL,{0},0,0,0,0,0,{1},{2}", _lineCounter + 1, baseline, tolerance);
+            int releaseHoldMs = Decimal.ToInt32(_releaseHoldInput.Value);
+            string payload = string.Format(CultureInfo.InvariantCulture, "H7CTL,{0},0,{1},{2},{3}", _lineCounter + 1, baseline, tolerance, releaseHoldMs);
             SendTextCommand(WrapFrame(payload));
             _pendingApply = new PendingApply
             {
@@ -850,11 +813,10 @@ namespace H7TofSerialConsole
                 RequestedAtUtc = DateTime.UtcNow
             };
             UpdateApplyStatus("已发送，等待板端确认", Color.Gold);
-        }
-
-        private void OnSendRaw()
-        {
-            SendTextCommand(_rawCommandBox.Text);
+            if (!_hasBoardParameterSync)
+            {
+                AppendLog("板端尚未回读 B/T/TH；本次参数会继续下发，但可能无法在工具中确认成功。", Color.Orange);
+            }
         }
 
         private void OnReleaseEstop()
@@ -868,7 +830,7 @@ namespace H7TofSerialConsole
             int baseline = _hasBoardParameterSync ? _lastBoardBaselineMm : Decimal.ToInt32(_baselineInput.Value);
             int tolerance = _hasBoardParameterSync ? _lastBoardToleranceMm : Decimal.ToInt32(_toleranceInput.Value);
             int releaseHoldMs = Decimal.ToInt32(_releaseHoldInput.Value);
-            string payload = string.Format(CultureInfo.InvariantCulture, "H7CTL,{0},0,0,0,1,0,{1},{2},{3}", _lineCounter + 1, baseline, tolerance, releaseHoldMs);
+            string payload = string.Format(CultureInfo.InvariantCulture, "H7CTL,{0},1,{1},{2},{3}", _lineCounter + 1, baseline, tolerance, releaseHoldMs);
             SendTextCommand(WrapFrame(payload));
             AppendLog(string.Format(CultureInfo.InvariantCulture, "已发送人工解除命令，持续 {0} ms。时间到且故障仍在时，板端会再次急停。", releaseHoldMs), Color.LightSkyBlue);
         }
@@ -890,7 +852,6 @@ namespace H7TofSerialConsole
             try
             {
                 _serialPort.Write(text);
-                _settings.LastRawCommand = _rawCommandBox.Text;
                 AppendLog(">> " + text.Trim(), Color.LightSkyBlue);
             }
             catch (Exception ex)
@@ -1022,7 +983,6 @@ namespace H7TofSerialConsole
             SetValue("estop", frame.Estop.ToString(CultureInfo.InvariantCulture));
             SetValue("self_estop", frame.SelfEstop.ToString(CultureInfo.InvariantCulture));
             SetValue("external_estop", frame.ExternalEstop.ToString(CultureInfo.InvariantCulture));
-            SetValue("motion_class", MotionClassName(frame.MotionClass));
             SetValue("valid_mask", FormatMask(frame.ValidMask));
             SetValue("fault_mask", FormatMask(frame.FaultMask));
             SetValue("trip_mask", FormatMask(frame.TripMask));
@@ -1055,7 +1015,7 @@ namespace H7TofSerialConsole
             {
                 if (!frame.HasBoardParameters)
                 {
-                    UpdateApplyStatus("板端未回读参数，无法确认", Color.Orange);
+                    UpdateApplyStatus("已下发，未获板端确认", Color.Orange);
                 }
                 else if (frame.BaselineMm == _pendingApply.BaselineMm && frame.ToleranceMm == _pendingApply.ToleranceMm)
                 {
@@ -1094,7 +1054,7 @@ namespace H7TofSerialConsole
 
         private void OnParameterInputValueChanged(object sender, EventArgs e)
         {
-            if (_suppressParameterInputTracking || !_hasBoardParameterSync || _pendingApply != null)
+            if (_suppressParameterInputTracking || _pendingApply != null)
             {
                 return;
             }
@@ -1105,11 +1065,11 @@ namespace H7TofSerialConsole
 
             if (_parameterInputsDirty)
             {
-                UpdateApplyStatus("本地参数已修改，待下发", Color.Gold);
+                UpdateApplyStatus(_hasBoardParameterSync ? "本地参数已修改，待下发" : "本地参数已修改，待下发（板端未确认）", Color.Gold);
             }
             else
             {
-                UpdateApplyStatus("已同步板端参数", Color.FromArgb(103, 240, 169));
+                UpdateApplyStatus(_hasBoardParameterSync ? "已同步板端参数" : "板端参数未确认", _hasBoardParameterSync ? Color.FromArgb(103, 240, 169) : Color.Orange);
             }
         }
 
@@ -1130,7 +1090,7 @@ namespace H7TofSerialConsole
 
             if (_pendingApply != null && (DateTime.UtcNow - _pendingApply.RequestedAtUtc).TotalSeconds > 3.0)
             {
-                UpdateApplyStatus("等待超时，请看板端回读", Color.Orange);
+                UpdateApplyStatus(_hasBoardParameterSync ? "等待超时，请看板端回读" : "已下发，未获板端确认", Color.Orange);
             }
 
             if (_autoReconnectBox.Checked && !_serialPort.IsOpen)
@@ -1167,7 +1127,6 @@ namespace H7TofSerialConsole
             {
                 _settings.BaudRate = baud;
             }
-            _settings.LastRawCommand = _rawCommandBox.Text;
             _settings.ReleaseHoldMs = Decimal.ToInt32(_releaseHoldInput.Value);
             _settings.AutoReconnect = _autoReconnectBox.Checked;
             SaveSettings(_settings);
@@ -1214,21 +1173,6 @@ namespace H7TofSerialConsole
         private static string FormatMask(int value)
         {
             return string.Format(CultureInfo.InvariantCulture, "0x{0:X2}", value & 0xFF);
-        }
-
-        private static string MotionClassName(int value)
-        {
-            switch (value)
-            {
-                case 0: return "IDLE";
-                case 1: return "FWD";
-                case 2: return "REV";
-                case 3: return "TURN";
-                case 4: return "STRAFE";
-                case 5: return "MIXED";
-                case 6: return "LINK_LOSS";
-                default: return value.ToString(CultureInfo.InvariantCulture);
-            }
         }
 
         private static bool TryParseFrame(string line, out H7Frame frame)
@@ -1289,10 +1233,6 @@ namespace H7TofSerialConsole
             if (TryParseTagged(parts, "A=", out taggedValue))
             {
                 frame.ActiveMask = taggedValue;
-            }
-            if (TryParseTagged(parts, "M=", out taggedValue))
-            {
-                frame.MotionClass = taggedValue;
             }
             if (TryParseTagged(parts, "SE=", out taggedValue))
             {
