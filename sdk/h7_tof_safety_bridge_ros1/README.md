@@ -1,44 +1,44 @@
 # h7_tof_safety_bridge
 
-ROS1 SDK for the pure-TOF STM32 H7 safety bridge.
+面向纯 TOF STM32 H7 安全桥的 ROS1 SDK。
 
-## Features
+## 功能
 
-- Publishes 4-channel TOF status, estop state, masks, threshold, and manual-release remaining time
-- Applies `baseline_mm` / `tolerance_mm` / `release_hold_ms` through `dynamic_reconfigure`
-- Exposes `/h7_tof/release_estop` for timed manual release
-- Publishes `/diagnostics` warnings when TOF channels are invalid, out of range, or threshold-tripped
-- Keeps working even if the board does not report `B/T/TH`, but marks that state as unconfirmed
+- 发布 4 路 TOF 状态、急停状态、各类掩码、阈值和人工解除剩余时间
+- 通过 `dynamic_reconfigure` 管理 `baseline_mm / tolerance_mm / release_hold_ms`
+- 提供 `/h7_tof/release_estop` 服务触发定时人工解除
+- 当 TOF 通道无效、超量程或越阈值时，通过 `/diagnostics` 发布告警
+- 即使板端没有回报 `B/T/TH`，ROS 仍可继续下发参数，但会明确标记为“未确认”
 
-## ROS Interfaces
+## ROS 接口
 
-Published:
+发布：
 
-- `/h7_tof/status` (`h7_tof_safety_bridge/TofSafetyStatus`)
-- `/h7_tof/estop` (`std_msgs/Bool`)
-- `/h7_tof/raw_line` (`std_msgs/String`)
-- `/h7_tof/distances_mm` (`std_msgs/UInt16MultiArray`)
-- `/diagnostics` (`diagnostic_msgs/DiagnosticArray`)
+- `/h7_tof/status`，类型 `h7_tof_safety_bridge/TofSafetyStatus`
+- `/h7_tof/estop`，类型 `std_msgs/Bool`
+- `/h7_tof/raw_line`，类型 `std_msgs/String`
+- `/h7_tof/distances_mm`，类型 `std_msgs/UInt16MultiArray`
+- `/diagnostics`，类型 `diagnostic_msgs/DiagnosticArray`
 
-Service:
+服务：
 
-- `/h7_tof/release_estop` (`std_srvs/Trigger`)
+- `/h7_tof/release_estop`，类型 `std_srvs/Trigger`
 
-## Dynamic Reconfigure
+## Dynamic Reconfigure 参数
 
 - `baseline_mm`
 - `tolerance_mm`
 - `release_hold_ms`
 
-## Launch
+## 启动方式
 
-Main bridge launch:
+主桥接节点：
 
 ```bash
 roslaunch h7_tof_safety_bridge h7_tof_safety_bridge.launch
 ```
 
-Useful args:
+常用参数：
 
 - `port`
 - `baud`
@@ -50,8 +50,8 @@ Useful args:
 - `tolerance_mm`
 - `release_hold_ms`
 
-## Notes
+## 说明
 
-- Invalid or out-of-range TOF readings are published as `65535`.
-- `has_board_params=false` means the board did not report `B/T/TH`; ROS can still send parameters, but cannot confirm board acceptance from status frames alone.
-- When `release_remaining_ms > 0`, the board temporarily suppresses `self_estop`. If the fault remains after the timer expires, estop asserts again.
+- 无效或超量程 TOF 数据统一发布为 `65535`
+- `has_board_params=false` 表示板端状态帧没有回报 `B/T/TH`；这时 ROS 仍可下发参数，但无法仅凭状态帧确认板端是否已采纳
+- 当 `release_remaining_ms > 0` 时，板端会临时抑制 `self_estop`；如果时间到后故障仍在，急停会再次拉起
