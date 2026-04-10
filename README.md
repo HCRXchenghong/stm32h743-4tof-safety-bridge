@@ -1,147 +1,206 @@
 # stm32h743-4tof-safety-bridge
 
-基于 STM32H743 的纯 TOF 安全桥，支持 4 路 UART TOF 传感器、本地急停判定、USB CDC 控制、ROS1 SDK、ROS1 `rqt` 调试面板，以及 Windows 串口调试工具。
+STM32H743 4 路 TOF 安全桥。
 
-这是一次破坏性协议升级。固件、ROS SDK、ROS `rqt` 和 Windows 工具需要整套一起升级；旧版基于运动方向和 `takeover` 语义的工具不再兼容当前纯 TOF 版本。
+这份 README 只保留一条最实用的真实部署路线，给第一次接触这个项目的人直接照着做。
 
-## 项目概览
+部署完成后，你会得到：
 
-- STM32 板端采集 4 路 TOF 距离
-- 板端本地完成阈值判定和急停输出
-- 板端通过 USB CDC 持续上报纯 TOF `H7TOF` 状态帧
-- 上位机可通过 `H7CTL` 下发 `baseline_mm`、`tolerance_mm` 和人工解除时间
-- 无效、超量程或故障距离统一按 `65535` 上报
+- 板子通过 USB 接到 Ubuntu
+- ROS1 SDK 读取板子串口数据
+- `rqt` 面板显示 4 路 TOF、急停状态、阈值
+- 可以在 `rqt` 里下发参数和人工解除急停
 
-## 控制协议
+## 1. 你需要准备什么
 
-控制帧格式：
+硬件：
 
-```text
-$H7CTL,seq,release_req,baseline_mm,tolerance_mm,release_hold_ms*CS
-```
+- 已焊好并能上电的 STM32H743 板
+- 4 路 TOF 传感器
+- USB 数据线
 
-字段说明：
+电脑环境：
 
-- `seq`：控制帧序号
-- `release_req`：是否请求人工解除，`1` 表示请求，`0` 表示不请求
-- `baseline_mm`：基准距离，单位 `mm`
-- `tolerance_mm`：容差距离，单位 `mm`
-- `release_hold_ms`：人工解除持续时间，单位 `ms`
+- Ubuntu 20.04
+- ROS1 Noetic
 
-## 状态协议
+如果你不是这个环境，先尽量按这个环境来，不要一上来自己改系统版本。
 
-状态帧格式：
+## 2. 先把固件烧进板子
 
-```text
-$H7TOF,seq,tof1,tof2,tof3,tof4,estop,valid_mask,fault_mask,R=...,F=...,S=...,C=...,E=...,L=...,TM=trip_mask,A=active_mask,SE=self_estop,EE=external_estop,RT=release_remaining_ms,B=baseline_mm,T=tolerance_mm,TH=threshold_mm*CS
-```
-
-重点字段：
-
-- `tof1..tof4`：4 路 TOF 距离，单位 `mm`
-- `valid_mask`：当前有效通道掩码
-- `fault_mask`：当前导致板端安全故障的通道掩码
-- `TM`：纯越阈值掩码
-- `A`：生效通道掩码，目前固定为 `0x0F`
-- `SE`：板端急停标志
-- `EE`：外部急停兼容标志，目前固定为 `0`
-- `RT`：人工解除剩余时间，单位 `ms`
-- `B` / `T` / `TH`：当前运行时基准值、容差值和阈值
-
-行为说明：
-
-- 原始 TOF 读数为 `0` 或无效值时，板端按无效/超量程处理，并对外上报 `65535`
-- 无效、掉线、超量程通道会从 `valid_mask` 中移除，并进入 `fault_mask`
-- 只要任一生效通道无效或超过阈值，且当前没有人工解除保护，板端就会急停
-- 人工解除计时结束后如果故障仍在，板端会再次急停
-
-## Windows 调试工具
-
-路径：
-
-- `tools/windows_serial_console`
-
-包含内容：
-
-- 源码：`tools/windows_serial_console/Program.cs`
-- 构建脚本：`tools/windows_serial_console/build.ps1`
-- 已编译程序：`tools/windows_serial_console/bin/H7TofSerialConsole.exe`
-
-主要功能：
-
-- 串口连接、断开、自动重连
-- 4 路 TOF 距离显示
-- 急停状态、掩码、阈值、人工解除剩余时间显示
-- 在线下发 `baseline_mm / tolerance_mm`
-- 触发人工解除
-- 根据 `B/T/TH` 回读判断板端是否真正确认参数
-- 本地保存串口、波特率和人工解除时间
-
-## ROS1 SDK
-
-路径：
-
-- `sdk/h7_tof_safety_bridge_ros1`
-
-主要功能：
-
-- 将纯 TOF 协议桥接为 ROS 话题、服务和诊断信息
-- 通过 `dynamic_reconfigure` 管理 `baseline_mm / tolerance_mm / release_hold_ms`
-- 提供 `/h7_tof/release_estop` 服务触发人工解除
-- 在状态消息里提供 `has_board_params`，用于区分“板端真实回读参数”和“仅本地配置值”
-
-## ROS1 rqt 调试面板
-
-路径：
-
-- `sdk/h7_tof_safety_bridge_rqt`
-
-主要功能：
-
-- 显示 4 路 TOF、急停状态、掩码、阈值和人工解除剩余时间
-- 通过 ROS SDK 下发 `baseline_mm / tolerance_mm`
-- 通过 ROS SDK 服务触发人工解除
-- 显示 `/h7_tof/raw_line` 原始日志
-- 不直接管理串口
-
-直接启动：
-
-```bash
-roslaunch h7_tof_safety_bridge_rqt h7_tof_safety_bridge_rqt.launch
-```
-
-同时启动 SDK 和 rqt：
-
-```bash
-roslaunch h7_tof_safety_bridge_rqt h7_tof_safety_bridge_with_rqt.launch
-```
-
-手动独立打开插件：
-
-```bash
-rqt --standalone h7_tof_safety_bridge_rqt/H7TofSafetyBridge
-```
-
-## 固件产物
-
-主构建输出：
-
-- `firmware/h743_tof_usb_bridge_cubeide/build/Release/stm32h743-4tof-safety-bridge.hex`
-
-发布目录副本：
+仓库里已经有编好的固件，直接烧这个文件：
 
 - `release/stm32h743-4tof-safety-bridge.hex`
 
-## 目录结构
+如果你已经确认板子里烧的就是这个版本，可以跳过这一步。
 
-```text
-stm32h743-4tof-safety-bridge/
-|-- firmware/
-|-- release/
-|-- sdk/
-|   |-- h7_tof_safety_bridge_ros1/
-|   `-- h7_tof_safety_bridge_rqt/
-|-- tools/
-|   `-- windows_serial_console/
-`-- README.md
+烧录完成后，把板子通过 USB 接到 Ubuntu。
+
+## 3. 在 Ubuntu 安装 ROS1 和依赖
+
+打开终端，直接执行：
+
+```bash
+sudo apt update
+sudo apt install -y \
+  ros-noetic-desktop-full \
+  ros-noetic-rqt \
+  ros-noetic-rqt-gui \
+  ros-noetic-rqt-gui-py \
+  ros-noetic-dynamic-reconfigure \
+  python3-serial
 ```
+
+再把当前用户加入串口权限组：
+
+```bash
+sudo usermod -a -G dialout $USER
+```
+
+这一步做完后，退出系统重新登录一次。
+
+## 4. 创建 ROS 工作空间
+
+打开新终端，执行：
+
+```bash
+mkdir -p ~/catkin_ws/src
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+catkin_make
+source ~/catkin_ws/devel/setup.bash
+```
+
+## 5. 把本项目的两个 ROS 包放进工作空间
+
+假设你的仓库在：
+
+```bash
+/path/to/stm32h743-4tof-safety-bridge
+```
+
+把下面两条命令里的路径改成你自己的实际路径，然后执行：
+
+```bash
+ln -s /path/to/stm32h743-4tof-safety-bridge/sdk/h7_tof_safety_bridge_ros1 ~/catkin_ws/src/h7_tof_safety_bridge
+ln -s /path/to/stm32h743-4tof-safety-bridge/sdk/h7_tof_safety_bridge_rqt ~/catkin_ws/src/h7_tof_safety_bridge_rqt
+```
+
+## 6. 编译
+
+执行：
+
+```bash
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+catkin_make
+source ~/catkin_ws/devel/setup.bash
+```
+
+如果这里报错，不要继续往下。先解决编译错误。
+
+## 7. 确认板子串口号
+
+插上板子后执行：
+
+```bash
+ls /dev/ttyACM*
+```
+
+常见结果是：
+
+```bash
+/dev/ttyACM0
+```
+
+如果你看到的是别的，比如 `/dev/ttyACM1`，后面启动命令就把它替换掉。
+
+## 8. 一条命令启动整套系统
+
+执行：
+
+```bash
+cd ~/catkin_ws
+source /opt/ros/noetic/setup.bash
+source ~/catkin_ws/devel/setup.bash
+roslaunch h7_tof_safety_bridge_rqt h7_tof_safety_bridge_with_rqt.launch port:=/dev/ttyACM0
+```
+
+如果你的串口不是 `/dev/ttyACM0`，自己替换成实际串口。
+
+## 9. 启动成功后你应该看到什么
+
+`rqt` 面板打开后，正常情况下会看到：
+
+- 左上角显示 `SDK 状态：在线`
+- 4 路 TOF 数值在刷新
+- 能看到 `Baseline / Tol / Threshold`
+- 能看到急停状态和剩余解除时间
+
+如果看不到这些，说明还没部署成功。
+
+## 10. 怎么操作
+
+### 改阈值参数
+
+在 `rqt` 面板里：
+
+1. 修改 `Baseline`
+2. 修改 `Tolerance`
+3. 点击“下发参数”
+4. 等顶部状态变成“板端已确认”
+
+### 人工解除急停
+
+在 `rqt` 面板里：
+
+1. 设置“人工解除(ms)”
+2. 点击“恢复急停”
+3. 看剩余时间是否开始倒计时
+
+如果时间到了，但故障还在，板子会再次急停。这是正常安全行为。
+
+## 11. 最简单的验收方法
+
+按下面顺序检查：
+
+1. 板子接上 USB 后能识别出 `/dev/ttyACM*`
+2. `roslaunch` 后 `rqt` 能打开
+3. 面板左上角显示 `SDK 状态：在线`
+4. 4 路 TOF 数据在刷新
+5. 修改参数后能显示“板端已确认”
+6. 人工解除后倒计时会变化
+
+这 6 条都满足，就说明已经部署成功。
+
+## 12. 最常见的 3 个问题
+
+### 问题 1：`ls /dev/ttyACM*` 没有设备
+
+先检查：
+
+- USB 线是不是数据线，不是只充电线
+- 板子有没有正常上电
+- 固件有没有正确烧进去
+
+### 问题 2：`roslaunch` 启动了，但 `rqt` 里显示离线
+
+先检查：
+
+- 启动命令里的 `port:=...` 对不对
+- 当前用户有没有串口权限
+- 有没有重新登录过系统
+
+### 问题 3：点“下发参数”后一直不确认
+
+先检查：
+
+- 固件是不是这个仓库里的新版本
+- 板子是否真的在线
+- 串口数据是否稳定
+
+## 13. 相关目录
+
+- 固件：`release/stm32h743-4tof-safety-bridge.hex`
+- ROS SDK：`sdk/h7_tof_safety_bridge_ros1`
+- `rqt` 面板：`sdk/h7_tof_safety_bridge_rqt`
